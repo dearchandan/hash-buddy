@@ -54,6 +54,11 @@ PREVIOUS="$(git rev-parse --short HEAD)"
 log "Currently at $PREVIOUS — roll back with: git checkout $PREVIOUS && sudo bash $0"
 
 # ------------------------------------------------------------------- pull ---
+# `chmod -R 775 storage` sets the exec bit on the .gitignore files Laravel keeps
+# inside storage/, and git tracks that bit — so without this every deploy sees
+# permanent phantom modifications and eventually refuses to fast-forward.
+sudo -u "$DEPLOY_USER" git config core.fileMode false
+
 log "Fetching origin/$BRANCH"
 # As the deploy user: git refuses to operate on a tree owned by someone else,
 # and running it as root would leave root-owned objects in .git.
