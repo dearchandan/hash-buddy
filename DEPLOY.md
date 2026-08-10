@@ -292,16 +292,43 @@ their session. See the *Shipping an APK* section of the README.
 ## 7. Deploying an update
 
 ```bash
-cd /var/www/hash-buddy && git pull
-cd api
-composer install --no-dev --optimize-autoloader
-php artisan migrate --force
-php artisan config:cache && php artisan route:cache
-sudo systemctl reload php8.3-fpm
+ssh -i ~/.ssh/key.pem ubuntu@YOUR_IP 'sudo bash /var/www/hash-buddy/deploy/release.sh'
 ```
+
+[`deploy/release.sh`](deploy/release.sh) pulls `origin/main`, reinstalls
+dependencies, migrates, rebuilds the caches as `www-data`, reloads php-fpm, and
+smoke-tests the result — exiting non-zero with the previous commit SHA if the
+smoke test fails, so a bad deploy announces itself instead of sitting there
+returning 500s.
+
+Two things it gets right that are easy to get wrong by hand:
+
+**Cache only at the final path.** Laravel bakes absolute paths into
+`bootstrap/cache/config.php`. Build a tree at one path, cache it, then move it,
+and the app looks for its log directory where it used to be. Requests that write
+a log 500; read-only ones keep working. A half-broken API is much harder to
+diagnose than a dead one, so the script never caches anywhere but in place.
+
+**Chown after composer, not before.** `composer install` triggers
+`package:discover`, which writes `bootstrap/cache` as the deploy user. Fix
+permissions first and composer immediately undoes it.
 
 The APK only needs rebuilding when the Flutter code changes — or when the API
 URL does, since that value is compiled in.
+
+### Rolling back
+
+Every run prints the commit it started from:
+
+```bash
+cd /var/www/hash-buddy
+sudo -u ubuntu git checkout <previous-sha>
+sudo bash deploy/release.sh
+```
+
+Migrations are the exception — `git checkout` does not un-migrate. If a release
+included a destructive migration, roll that back deliberately with
+`php artisan migrate:rollback` before reverting the code.
 
 ---
 

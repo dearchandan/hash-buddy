@@ -249,9 +249,15 @@ cat <<DONE
   Logs:    ${API_DIR}/storage/logs/laravel.log
 
   Nobody can sign in yet. Add the numbers you are testing with to
-  HASHBUDDY_OTP_TEST_NUMBERS in ${API_DIR}/.env, then:
+  HASHBUDDY_OTP_TEST_NUMBERS in ${API_DIR}/.env, then re-cache the config —
+  as www-data, or the cache lands root-owned and the next deploy cannot
+  rewrite it:
 
-      cd ${API_DIR} && php artisan config:cache
+      cd ${API_DIR} && sudo -u www-data php artisan config:cache
+
+  Later deployments are one command:
+
+      sudo bash ${APP_DIR}/deploy/release.sh
 
   Then build the app against this host:
 
