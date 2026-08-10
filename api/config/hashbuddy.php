@@ -14,7 +14,24 @@ return [
     */
 
     'otp' => [
+        // Blanket "return the code in the response" switch. Honoured only
+        // outside production, so leaving it on by mistake on a live server
+        // cannot turn login into an open door.
         'debug' => env('HASHBUDDY_OTP_DEBUG', false),
+
+        // Specific numbers that get their code in the API response instead of
+        // by SMS, even in production. This is how a small test group signs in
+        // before an SMS provider exists, without making every account
+        // reachable by anyone who can guess a phone number.
+        'test_numbers' => array_values(array_filter(array_map(
+            'trim',
+            explode(',', (string) env('HASHBUDDY_OTP_TEST_NUMBERS', '')),
+        ))),
+
+        // 'log' writes the code to the Laravel log and sends nothing. Any other
+        // value must be backed by a real integration in OtpService::deliver().
+        'sms_driver' => env('HASHBUDDY_SMS_DRIVER', 'log'),
+
         'length' => 6,
         'ttl_minutes' => (int) env('HASHBUDDY_OTP_TTL_MINUTES', 10),
         'max_attempts' => (int) env('HASHBUDDY_OTP_MAX_ATTEMPTS', 5),

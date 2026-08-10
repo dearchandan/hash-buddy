@@ -13,6 +13,8 @@ hash-buddy/
 └── app/    Flutter client
 ```
 
+Deploying to EC2 behind your own domain: **[DEPLOY.md](DEPLOY.md)**.
+
 ---
 
 ## What works today
@@ -107,12 +109,19 @@ cd app
 flutter run -d chrome --dart-define=HASH_BUDDY_API=http://127.0.0.1:8000/api/v1
 ```
 
-For an Android emulator, install Android Studio first (`flutter doctor` currently
-flags it as missing), then:
+For the Android emulator, an AVD named **hashbuddy_pixel** (Pixel 7, API 36) is
+already set up:
 
 ```bash
-flutter run --dart-define=HASH_BUDDY_API=http://10.0.2.2:8000/api/v1
+flutter emulators --launch hashbuddy_pixel
+flutter run -d emulator-5554 --dart-define=HASH_BUDDY_API=http://10.0.2.2:8000/api/v1
 ```
+
+`android/gradle.properties` sets `kotlin.incremental=false`. This project sits on
+`D:` while the pub cache is on `C:`, and Kotlin's incremental compiler throws
+`this and base files have different roots` when it tries to relativise plugin
+sources across Windows drives. Moving `PUB_CACHE` onto `D:` would fix it too, at
+the cost of re-downloading packages.
 
 `10.0.2.2` is how the Android emulator reaches your host. Use `127.0.0.1` for the
 iOS simulator, or your machine's LAN IP for a physical device.
@@ -123,6 +132,68 @@ builds can reach a local `http://` API — remove it before shipping a release.
 flutter analyze   # clean
 flutter test      # 8 tests
 ```
+
+---
+
+## Shipping an APK
+
+```bash
+cd app
+flutter build apk --release --split-per-abi \
+  --dart-define=HASH_BUDDY_API=https://your-api.example.com/api/v1
+```
+
+Outputs land in `build/app/outputs/flutter-apk/`. Split per ABI gives ~15-19 MB
+each instead of one ~45 MB fat APK; for Play use `flutter build appbundle`
+instead and let Google do the splitting.
+
+**Signing.** Release falls back to the debug key so the build works locally, but
+a debug-signed APK cannot go to Play, and a regenerated key produces an APK that
+will not install over the previous one. Generate a keystore once, keep it
+somewhere you will not lose it, and never commit it:
+
+```bash
+keytool -genkey -v -keystore hashbuddy-release.jks -keyalg RSA \
+        -keysize 2048 -validity 10000 -alias hashbuddy
+```
+
+Then create `app/android/key.properties` (gitignored):
+
+```properties
+storePassword=...
+keyPassword=...
+keyAlias=hashbuddy
+storeFile=D:/keys/hashbuddy-release.jks
+```
+
+**Release builds cannot talk to `http://`.** Cleartext is permitted only in the
+debug manifest, so `--dart-define` must point at an HTTPS host. For a quick test
+on your own wifi before you have one, build `--debug` and use your LAN IP.
+
+## Permissions
+
+The release APK declares exactly one permission: `INTERNET`. Nothing in the app
+uses location or Bluetooth — travellers pick a drop zone from a list — and an
+unused permission costs install conversion and a Play Console declaration for
+no benefit.
+
+If that changes, the order of need is:
+
+1. **`POST_NOTIFICATIONS`** (Android 13+). This is the one you will actually
+   want first: without push, two lone travellers only pair when one opens a ride
+   and the other happens to look again.
+2. **`ACCESS_COARSE_LOCATION`**, foreground only, if you add live location
+   between already-matched travellers to solve the kerb rendezvous, or a geofence
+   that notices someone has landed at BLR. Ask at the point of use with a
+   rationale, not on launch. Prefer coarse — a zone-level product does not need
+   `ACCESS_FINE_LOCATION`. Never request background location: it triggers a
+   special Play review this use case will not survive.
+3. **Bluetooth** — no justified use. BLE proximity at the kerb is worse than a
+   map plus a message, and `BLUETOOTH_SCAN` invites scrutiny you gain nothing from.
+
+Any of these requires a Play Console **Data safety** declaration and a published
+privacy policy. Collecting phone numbers already puts you in scope of India's
+DPDP Act 2023, so that policy is needed regardless.
 
 ---
 

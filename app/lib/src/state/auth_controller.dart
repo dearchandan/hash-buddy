@@ -8,7 +8,10 @@ enum AuthStatus { unknown, signedOut, awaitingProfile, signedIn }
 
 class AuthController extends ChangeNotifier {
   AuthController(this._api) {
-    _api.onUnauthenticated = signOut;
+    // A rejected token means the server has already forgotten us, so there is
+    // nothing to tell it — calling the server here would 401 in turn and drive
+    // this callback round again.
+    _api.onUnauthenticated = () => signOut(notifyServer: false);
   }
 
   static const String _tokenKey = 'hash_buddy_token';
@@ -18,6 +21,7 @@ class AuthController extends ChangeNotifier {
   AuthStatus _status = AuthStatus.unknown;
   AppUser? _user;
   String? _pendingPhone;
+  bool _signingOut = false;
 
   AuthStatus get status => _status;
   AppUser? get user => _user;
@@ -86,16 +90,28 @@ class AuthController extends ChangeNotifier {
     _set(AuthStatus.signedIn);
   }
 
-  Future<void> signOut() async {
-    try {
-      await _api.post('/auth/logout');
-    } catch (_) {
-      // Signing out locally matters more than telling the server about it.
+  Future<void> signOut({bool notifyServer = true}) async {
+    if (_signingOut) {
+      return;
     }
-    await _clearToken();
-    _user = null;
-    _pendingPhone = null;
-    _set(AuthStatus.signedOut);
+    _signingOut = true;
+
+    try {
+      if (notifyServer) {
+        try {
+          await _api.post('/auth/logout');
+        } catch (_) {
+          // Signing out locally matters more than telling the server about it.
+        }
+      }
+
+      await _clearToken();
+      _user = null;
+      _pendingPhone = null;
+      _set(AuthStatus.signedOut);
+    } finally {
+      _signingOut = false;
+    }
   }
 
   Future<void> _clearToken() async {

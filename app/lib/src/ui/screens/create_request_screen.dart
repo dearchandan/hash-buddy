@@ -8,6 +8,7 @@ import '../../models/zone.dart';
 import '../../state/auth_controller.dart';
 import '../../state/rides_controller.dart';
 import '../formatters.dart';
+import '../widgets/counter_field.dart';
 
 class CreateRequestScreen extends StatefulWidget {
   const CreateRequestScreen({super.key});
@@ -20,20 +21,25 @@ class _CreateRequestScreenState extends State<CreateRequestScreen> {
   final TextEditingController _flight = TextEditingController();
   final TextEditingController _landmark = TextEditingController();
 
-  String _terminal = 'T2';
+  String _terminal = 'T1';
   Zone? _zone;
   DateTime _departFrom = _nextHalfHour();
-  int _windowMinutes = 45;
+  int _windowMinutes = 30;
+  int _travellers = 1;
   int _luggage = 1;
   bool _womenOnly = false;
   bool _saving = false;
 
-  /// How wide a departure window the traveller is willing to wait out. Wider
-  /// windows match far more often, which is why 45 minutes is the default.
+  /// How long a traveller is willing to wait. Wider windows match far more
+  /// often, which is why the copy under the chips says so.
   static const List<int> _windowOptions = <int>[30, 45, 60, 90];
+
+  /// Matches `hashbuddy.groups.absolute_max_seats` on the API.
+  static const int _maxTravellers = 4;
 
   static DateTime _nextHalfHour() {
     final DateTime now = DateTime.now().add(const Duration(minutes: 30));
+
     return DateTime(now.year, now.month, now.day, now.hour, now.minute >= 30 ? 30 : 0);
   }
 
@@ -67,6 +73,7 @@ class _CreateRequestScreenState extends State<CreateRequestScreen> {
 
   Future<void> _pickDeparture() async {
     final DateTime now = DateTime.now();
+
     final DateTime? date = await showDatePicker(
       context: context,
       initialDate: _departFrom,
@@ -92,11 +99,13 @@ class _CreateRequestScreenState extends State<CreateRequestScreen> {
 
   Future<void> _submit() async {
     if (_zone == null) {
-      showMessage(context, 'Where are you heading?');
+      showMessage(context, 'Where are you going?');
+
       return;
     }
     if (_departUntil.isBefore(DateTime.now())) {
       showMessage(context, 'That departure window has already passed.');
+
       return;
     }
 
@@ -107,6 +116,7 @@ class _CreateRequestScreenState extends State<CreateRequestScreen> {
             zoneId: _zone!.id,
             windowStart: _departFrom,
             windowEnd: _departUntil,
+            seats: _travellers,
             luggageCount: _luggage,
             genderPreference: _womenOnly ? 'women_only' : 'any',
             flightNumber: _flight.text.trim(),
@@ -131,10 +141,11 @@ class _CreateRequestScreenState extends State<CreateRequestScreen> {
     final bool isWoman = context.watch<AuthController>().user?.gender == 'female';
 
     return Scaffold(
-      appBar: AppBar(title: const Text('New ride request')),
+      appBar: AppBar(title: const Text('Find mates')),
       body: ListView(
-        padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
+        padding: const EdgeInsets.fromLTRB(16, 0, 16, 32),
         children: <Widget>[
+          _section('PICKUP'),
           _label('Terminal'),
           SegmentedButton<String>(
             segments: AppConfig.terminals
@@ -143,11 +154,13 @@ class _CreateRequestScreenState extends State<CreateRequestScreen> {
             selected: <String>{_terminal},
             onSelectionChanged: (Set<String> value) => setState(() => _terminal = value.first),
           ),
-          const SizedBox(height: 20),
 
-          _label('Heading to'),
+          _section('DESTINATION'),
+          _label('Where are you going?'),
           InputDecorator(
-            decoration: const InputDecoration(contentPadding: EdgeInsets.symmetric(horizontal: 12)),
+            decoration: const InputDecoration(
+              contentPadding: EdgeInsets.symmetric(horizontal: 12),
+            ),
             child: DropdownButtonHideUnderline(
               child: DropdownButton<Zone>(
                 value: _zone,
@@ -160,18 +173,16 @@ class _CreateRequestScreenState extends State<CreateRequestScreen> {
               ),
             ),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 16),
+          _label('Landmark (optional)'),
           TextField(
             controller: _landmark,
             textCapitalization: TextCapitalization.words,
-            decoration: const InputDecoration(
-              labelText: 'Landmark (optional)',
-              hintText: 'Forum Mall',
-            ),
+            decoration: const InputDecoration(hintText: 'e.g. Sony Signal'),
           ),
-          const SizedBox(height: 20),
 
-          _label('Leaving the airport'),
+          _section('WHEN'),
+          _label('When will you leave?'),
           InkWell(
             onTap: _pickDeparture,
             borderRadius: BorderRadius.circular(12),
@@ -191,14 +202,11 @@ class _CreateRequestScreenState extends State<CreateRequestScreen> {
               ),
             ),
           ),
-          const SizedBox(height: 12),
-          Text(
-            'How long can you wait?',
-            style: TextStyle(fontSize: 13, color: scheme.onSurfaceVariant),
-          ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 16),
+          _label('How long can you wait?'),
           Wrap(
             spacing: 8,
+            runSpacing: 8,
             children: _windowOptions.map((int minutes) {
               return ChoiceChip(
                 label: Text('$minutes min'),
@@ -207,58 +215,23 @@ class _CreateRequestScreenState extends State<CreateRequestScreen> {
               );
             }).toList(),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 12),
           Text(
-            'Matching until ${clockTime(_departUntil)}. A wider window finds mates far more often.',
-            style: TextStyle(fontSize: 12, color: scheme.onSurfaceVariant),
+            'Matching until ${clockTime(_departUntil)}.\nA wider window finds more people.',
+            style: TextStyle(fontSize: 13, color: scheme.onSurfaceVariant, height: 1.4),
           ),
-          const SizedBox(height: 20),
 
-          _label('Flight number (optional)'),
-          TextField(
-            controller: _flight,
-            textCapitalization: TextCapitalization.characters,
-            inputFormatters: <TextInputFormatter>[LengthLimitingTextInputFormatter(10)],
-            decoration: const InputDecoration(hintText: 'AI2846'),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            'Travellers on your flight land exactly when you do, so we rank them higher.',
-            style: TextStyle(fontSize: 12, color: scheme.onSurfaceVariant),
-          ),
-          const SizedBox(height: 20),
-
-          _label('Luggage'),
-          Row(
-            children: <Widget>[
-              IconButton.filledTonal(
-                onPressed: _luggage > 0 ? () => setState(() => _luggage--) : null,
-                icon: const Icon(Icons.remove_rounded),
-              ),
-              SizedBox(
-                width: 56,
-                child: Text(
-                  '$_luggage',
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
-                ),
-              ),
-              IconButton.filledTonal(
-                onPressed: _luggage < 6 ? () => setState(() => _luggage++) : null,
-                icon: const Icon(Icons.add_rounded),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Text(
-                  'Bags decide whether your group fits a sedan or needs an SUV.',
-                  style: TextStyle(fontSize: 12, color: scheme.onSurfaceVariant),
-                ),
-              ),
-            ],
+          _section('TRAVELLERS'),
+          CounterField(
+            label: 'People travelling',
+            value: _travellers,
+            min: 1,
+            max: _maxTravellers,
+            onChanged: (int value) => setState(() => _travellers = value),
           ),
 
           if (isWoman) ...<Widget>[
-            const SizedBox(height: 12),
+            _section('PREFERENCES'),
             SwitchListTile(
               contentPadding: EdgeInsets.zero,
               value: _womenOnly,
@@ -271,17 +244,53 @@ class _CreateRequestScreenState extends State<CreateRequestScreen> {
             ),
           ],
 
-          const SizedBox(height: 28),
+          _section('LUGGAGE'),
+          CounterField(
+            label: 'Suitcases',
+            value: _luggage,
+            max: 6,
+            onChanged: (int value) => setState(() => _luggage = value),
+          ),
+
+          _section('FLIGHT'),
+          _label('Flight number (optional)'),
+          TextField(
+            controller: _flight,
+            textCapitalization: TextCapitalization.characters,
+            inputFormatters: <TextInputFormatter>[LengthLimitingTextInputFormatter(10)],
+            decoration: const InputDecoration(hintText: 'AI2846'),
+          ),
+          const SizedBox(height: 12),
+          Text(
+            "We'll prioritize passengers on the same flight.",
+            style: TextStyle(fontSize: 13, color: scheme.onSurfaceVariant, height: 1.4),
+          ),
+
+          const SizedBox(height: 32),
           FilledButton(
             onPressed: _saving ? null : _submit,
             child: _saving
                 ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2))
-                : const Text('Find mates'),
+                : const Text('Find co-passengers'),
           ),
         ],
       ),
     );
   }
+
+  /// A small-caps group heading, e.g. PICKUP.
+  Widget _section(String title) => Padding(
+        padding: const EdgeInsets.only(top: 28, bottom: 14),
+        child: Text(
+          title,
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w700,
+            letterSpacing: 1.3,
+            color: Theme.of(context).colorScheme.primary,
+          ),
+        ),
+      );
 
   Widget _label(String text) => Padding(
         padding: const EdgeInsets.only(bottom: 8),

@@ -4,4 +4,10 @@
          to allow setting breakpoints, to provide hot reload, etc.
     -->
     <uses-permission android:name="android.permission.INTERNET"/>
+
+    <!-- Debug builds talk to a local Laravel over plain http (10.0.2.2 on the
+         emulator, a LAN address on a real handset). This lives here rather than
+         in the main manifest so it cannot leak into a release APK, where
+         cleartext would expose login codes and bearer tokens on the wire. -->
+    <application android:usesCleartextTraffic="true" />
 </manifest>

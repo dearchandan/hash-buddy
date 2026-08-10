@@ -1,12 +1,15 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <uses-permission android:name="android.permission.INTERNET"/>
-    <!-- usesCleartextTraffic lets debug builds reach a local http:// API on
-         10.0.2.2 or a LAN address. Remove it before shipping a release. -->
+
+    <!-- No location or Bluetooth permission is declared, because nothing in the
+         app uses either. Travellers pick a drop zone from a list. Adding a
+         permission you do not exercise costs you install conversion and a Play
+         Console declaration for no benefit. -->
+
     <application
         android:label="Hash Buddy"
         android:name="${applicationName}"
-        android:icon="@mipmap/ic_launcher"
-        android:usesCleartextTraffic="true">
+        android:icon="@mipmap/ic_launcher">
         <activity
             android:name=".MainActivity"
             android:exported="true"

@@ -42,34 +42,54 @@ class DemoSeeder extends Seeder
 
         $people = collect($cast)->map(fn ($p) => User::updateOrCreate(
             ['phone' => $p[0]],
-            ['name' => $p[1], 'gender' => $p[2], 'rating_avg' => $p[3], 'rating_count' => $p[4], 'phone_verified_at' => now()],
+            [
+                'name' => $p[1],
+                'gender' => $p[2],
+                'rating_avg' => $p[3],
+                'rating_count' => $p[4],
+                // Ratings come from completed rides, so the two move together —
+                // otherwise the profile reads "4.6 stars, 0 rides".
+                'rides_completed' => $p[4],
+                'phone_verified_at' => now(),
+            ],
         ));
 
-        // Everyone lands in the same arrival bank this evening.
-        $base = now()->addHours(3)->startOfHour();
+        // Everyone lands in the same arrival bank, timed so the window the app's
+        // form defaults to always overlaps by more than the ten-minute floor.
+        //
+        // That form offers to leave at the next half hour and waits 30 minutes,
+        // so its window sits somewhere in [now, now + 60]. Starting the seeded
+        // rides 15 minutes out and running them a full hour covers every
+        // position that window can land in. Seed them any later and a demo that
+        // follows the natural flow finds nobody, which reads as a broken matcher
+        // rather than data placed out of reach.
+        $base = now()->addMinutes(15)->startOfMinute();
+        $window = 60;
 
-        // A pair that has already formed and still has a seat spare.
+        // The busiest corridor sits on T1, the terminal the app's form selects by
+        // default, so the shortest path through the app finds both a joinable
+        // group and a lone traveller.
         $hostRequest = RideRequest::create([
             'user_id' => $people[1]->id,
-            'terminal' => 'T2',
+            'terminal' => 'T1',
             'zone_id' => $koramangala->id,
             'flight_number' => '6E2134',
             'window_start' => $base,
-            'window_end' => $base->copy()->addMinutes(40),
+            'window_end' => $base->copy()->addMinutes($window),
             'seats' => 1,
             'luggage_count' => 1,
             'drop_landmark' => 'Forum Mall',
         ]);
-        $groups->createFromRequest($hostRequest, maxSeats: 3, meetingPoint: 'T2 Arrivals, Pillar 4');
+        $groups->createFromRequest($hostRequest, maxSeats: 3, meetingPoint: 'T1 Arrivals, Pillar 4');
 
         // Lone travellers still looking.
         RideRequest::create([
             'user_id' => $people[0]->id,
-            'terminal' => 'T2',
+            'terminal' => 'T1',
             'zone_id' => $koramangala->id,
             'flight_number' => 'AI2846',
             'window_start' => $base->copy()->addMinutes(10),
-            'window_end' => $base->copy()->addMinutes(55),
+            'window_end' => $base->copy()->addMinutes($window),
             'seats' => 1,
             'luggage_count' => 2,
             'drop_landmark' => 'Sony World Signal',
@@ -80,7 +100,7 @@ class DemoSeeder extends Seeder
             'terminal' => 'T2',
             'zone_id' => $hsr->id,
             'window_start' => $base->copy()->addMinutes(15),
-            'window_end' => $base->copy()->addMinutes(60),
+            'window_end' => $base->copy()->addMinutes($window),
             'seats' => 1,
             'luggage_count' => 1,
             'gender_preference' => 'women_only',
@@ -91,7 +111,7 @@ class DemoSeeder extends Seeder
             'terminal' => 'T1',
             'zone_id' => $hsr->id,
             'window_start' => $base->copy()->addMinutes(5),
-            'window_end' => $base->copy()->addMinutes(50),
+            'window_end' => $base->copy()->addMinutes($window),
             'seats' => 1,
             'luggage_count' => 1,
         ]);

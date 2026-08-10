@@ -18,8 +18,11 @@ pubspec.lock
 
 # Platform build output
 android/.gradle/
+android/.kotlin/
 android/local.properties
 android/key.properties
+*.jks
+*.keystore
 ios/Pods/
 ios/.symlinks/
 ios/Flutter/Flutter.framework

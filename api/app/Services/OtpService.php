@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Exceptions\RideException;
 use App\Models\OtpCode;
 use App\Models\User;
 use Illuminate\Support\Facades\Hash;
@@ -10,14 +11,26 @@ use Illuminate\Support\Facades\Log;
 /**
  * Phone-number login.
  *
- * No SMS gateway is wired up yet. In debug mode the code comes back in the API
- * response so the whole flow is drivable locally; swap `deliver()` for a real
- * provider before this meets a user.
+ * There is no SMS gateway wired up yet. Until there is, a code can only reach a
+ * traveller by being returned in the API response, which is safe locally and
+ * for an explicit list of test numbers, and unacceptable for anyone else.
  */
 class OtpService
 {
     public function issue(string $phone): array
     {
+        $reveal = $this->shouldRevealCode($phone);
+
+        if (! $reveal && ! $this->hasSmsProvider()) {
+            // Better a loud failure than issuing a code the traveller can never
+            // receive and a login screen that hangs forever.
+            throw new RideException(
+                'Login is not available yet: no SMS provider is configured.',
+                'sms_unavailable',
+                503,
+            );
+        }
+
         $code = str_pad((string) random_int(0, 999999), config('hashbuddy.otp.length'), '0', STR_PAD_LEFT);
 
         // One live code per phone — issuing a new one retires the old.
@@ -33,7 +46,7 @@ class OtpService
 
         return [
             'expires_at' => $otp->expires_at,
-            'debug_code' => config('hashbuddy.otp.debug') ? $code : null,
+            'debug_code' => $reveal ? $code : null,
         ];
     }
 
@@ -67,9 +80,37 @@ class OtpService
         return $user;
     }
 
+    /**
+     * Whether this caller may read their own code out of the API response.
+     */
+    private function shouldRevealCode(string $phone): bool
+    {
+        if (in_array($phone, config('hashbuddy.otp.test_numbers'), true)) {
+            return true;
+        }
+
+        // The blanket flag is deliberately ignored in production.
+        return (bool) config('hashbuddy.otp.debug') && ! app()->isProduction();
+    }
+
+    private function hasSmsProvider(): bool
+    {
+        return config('hashbuddy.otp.sms_driver') !== 'log';
+    }
+
     private function deliver(string $phone, string $code): void
     {
-        // TODO: replace with an SMS provider (MSG91 / Gupshup / Twilio).
-        Log::info('Hash Buddy OTP issued', ['phone' => $phone, 'code' => $code]);
+        if (! $this->hasSmsProvider()) {
+            Log::info('Hash Buddy OTP issued (no SMS provider)', ['phone' => $phone, 'code' => $code]);
+
+            return;
+        }
+
+        // TODO: send via the configured provider (MSG91 / Gupshup / Twilio).
+        throw new RideException(
+            'SMS driver ['.config('hashbuddy.otp.sms_driver').'] is not implemented yet.',
+            'sms_unavailable',
+            503,
+        );
     }
 }

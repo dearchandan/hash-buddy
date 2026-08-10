@@ -1,4 +1,4 @@
-package com.example.hash_buddy
+package com.agilemania.hashbuddy
 
 import io.flutter.embedding.android.FlutterActivity
 

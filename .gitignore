@@ -1,0 +1,15 @@
+# Credentials — never commit these.
+# A .pem dropped into the project directory is one `git add .` away from being
+# public forever, and rotating an EC2 key pair afterwards means rebuilding the
+# instance's authorized_keys.
+*.pem
+*.key
+*.jks
+*.keystore
+.env
+
+# OS / editor noise
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
