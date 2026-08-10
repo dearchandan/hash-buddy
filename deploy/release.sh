@@ -73,16 +73,23 @@ fi
 log "Now at $(git rev-parse --short HEAD) — $(git log --oneline -1 --format=%s)"
 
 # ------------------------------------------------------------ dependencies ---
-log "Installing PHP dependencies"
 cd "$API_DIR"
+mkdir -p bootstrap/cache storage/framework/{cache,sessions,views} storage/logs
+
+# bootstrap/cache is www-data's at rest, but composer runs as the deploy user
+# and its post-autoload-dump hook (package:discover) writes there — so it has to
+# be handed over for the duration and handed straight back. Skipping the loan
+# fails the install; skipping the return leaves the web server unable to write
+# its own caches. Both directions have bitten this deploy already.
+log "Installing PHP dependencies"
+chown -R "$DEPLOY_USER":www-data bootstrap/cache
+chmod -R 775 bootstrap/cache
+
 sudo -u "$DEPLOY_USER" COMPOSER_ALLOW_SUPERUSER=0 \
     composer install --no-dev --optimize-autoloader --no-interaction --quiet
 
 # ------------------------------------------------------------- permissions ---
-# composer's package:discover writes bootstrap/cache as the deploy user, so this
-# has to run after it, not before.
 log "Restoring permissions"
-mkdir -p bootstrap/cache storage/framework/{cache,sessions,views} storage/logs
 chown -R www-data:www-data storage bootstrap/cache
 chmod -R 775 storage bootstrap/cache
 
