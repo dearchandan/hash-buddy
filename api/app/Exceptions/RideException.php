@@ -84,6 +84,29 @@ class RideException extends Exception
         return new self('Your account cannot join rides right now.', 'user_blocked', 403);
     }
 
+    public static function hostOnly(): self
+    {
+        return new self('Only the traveller who opened this ride can do that.', 'host_only', 403);
+    }
+
+    public static function rideAlreadyClosed(): self
+    {
+        return new self('This ride is already closed.', 'ride_already_closed', 409);
+    }
+
+    public static function rideEmpty(): self
+    {
+        return new self('Nobody is on this ride yet.', 'ride_empty', 409);
+    }
+
+    public static function duplicateRequest(): self
+    {
+        return new self(
+            'You already have an open request for this trip.',
+            'duplicate_request',
+        );
+    }
+
     public static function chatClosed(): self
     {
         return new self('This ride is over, so its chat is closed.', 'chat_closed', 409);

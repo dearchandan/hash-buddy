@@ -23,7 +23,7 @@ class GroupScreen extends StatefulWidget {
 class _GroupScreenState extends State<GroupScreen> {
   RideGroup? _group;
   Object? _error;
-  bool _leaving = false;
+  bool _busy = false;
 
   @override
   void initState() {
@@ -68,7 +68,7 @@ class _GroupScreenState extends State<GroupScreen> {
       return;
     }
 
-    setState(() => _leaving = true);
+    setState(() => _busy = true);
     try {
       await context.read<RidesController>().leaveGroup(widget.groupId);
       if (mounted) {
@@ -77,9 +77,110 @@ class _GroupScreenState extends State<GroupScreen> {
     } catch (error) {
       if (mounted) {
         showError(context, error);
-        setState(() => _leaving = false);
+        setState(() => _busy = false);
       }
     }
+  }
+
+  /// Close the ride for everyone. Confirmed hard, because the people already
+  /// aboard are relying on it and will be sent looking again.
+  Future<void> _cancel() async {
+    final RideGroup? group = _group;
+    final int others = (group?.members.length ?? 1) - 1;
+
+    final bool confirmed = await _confirm(
+      title: 'Close this ride?',
+      body: others > 0
+          ? 'You opened this ride, so closing it ends it for everyone. '
+              '$others other traveller${others == 1 ? '' : 's'} will be told and '
+              'sent looking for another ride.'
+          : 'The ride disappears from the app and nobody can join it.',
+      action: 'Close ride',
+      destructive: true,
+    );
+
+    if (!confirmed || !mounted) {
+      return;
+    }
+
+    setState(() => _busy = true);
+    try {
+      await context.read<RidesController>().cancelGroup(widget.groupId);
+      if (mounted) {
+        Navigator.of(context).pop();
+      }
+    } catch (error) {
+      if (mounted) {
+        showError(context, error);
+        setState(() => _busy = false);
+      }
+    }
+  }
+
+  Future<void> _complete() async {
+    final RideGroup? group = _group;
+    final int aboard = group?.seatsTaken ?? 1;
+    final bool unfilled = (group?.seatsAvailable ?? 0) > 0;
+
+    final bool confirmed = await _confirm(
+      title: 'Mark this ride completed?',
+      body: unfilled
+          ? 'The ride closes with the $aboard of you travelling, and the fare '
+              'splits $aboard ways instead of ${group?.maxSeats ?? aboard}. '
+              'Nobody else can join after this.'
+          : 'The ride closes and the fare splits between all $aboard of you.',
+      action: 'Mark completed',
+      destructive: false,
+    );
+
+    if (!confirmed || !mounted) {
+      return;
+    }
+
+    setState(() => _busy = true);
+    try {
+      await context.read<RidesController>().completeGroup(widget.groupId);
+      if (mounted) {
+        showMessage(context, 'Ride completed. Safe travels.');
+        Navigator.of(context).pop();
+      }
+    } catch (error) {
+      if (mounted) {
+        showError(context, error);
+        setState(() => _busy = false);
+      }
+    }
+  }
+
+  Future<bool> _confirm({
+    required String title,
+    required String body,
+    required String action,
+    required bool destructive,
+  }) async {
+    final ColorScheme scheme = Theme.of(context).colorScheme;
+
+    return await showDialog<bool>(
+          context: context,
+          builder: (BuildContext context) => AlertDialog(
+            title: Text(title),
+            content: Text(body),
+            actions: <Widget>[
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(false),
+                child: const Text('Not yet'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.of(context).pop(true),
+                style: destructive
+                    ? FilledButton.styleFrom(backgroundColor: scheme.error)
+                    : null,
+                child: Text(action),
+              ),
+            ],
+          ),
+        ) ??
+        false;
   }
 
   @override
@@ -245,9 +346,33 @@ class _GroupScreenState extends State<GroupScreen> {
         ],
 
         const SizedBox(height: 16),
-        if (group.isMember && !group.isCancelled)
+
+        // The host opened the ride and books the cab, so ending it is theirs.
+        // Everyone else can only take their own seat back.
+        if (group.isHost && !group.isCancelled) ...<Widget>[
+          FilledButton.icon(
+            onPressed: _busy ? null : _complete,
+            icon: const Icon(Icons.check_circle_outline_rounded),
+            label: const Text('Mark ride completed'),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            group.seatsAvailable > 0
+                ? 'You do not have to wait for the last seat. Completing now '
+                    'splits the fare between the ${group.seatsTaken} of you travelling.'
+                : 'Closes the ride and settles the split between everyone aboard.',
+            style: TextStyle(fontSize: 12, color: scheme.onSurfaceVariant),
+          ),
+          const SizedBox(height: 16),
+          OutlinedButton.icon(
+            onPressed: _busy ? null : _cancel,
+            style: OutlinedButton.styleFrom(foregroundColor: scheme.error),
+            icon: const Icon(Icons.cancel_outlined),
+            label: const Text('Close this ride'),
+          ),
+        ] else if (group.isMember && !group.isCancelled)
           OutlinedButton(
-            onPressed: _leaving ? null : _leave,
+            onPressed: _busy ? null : _leave,
             style: OutlinedButton.styleFrom(foregroundColor: scheme.error),
             child: const Text('Leave this ride'),
           ),

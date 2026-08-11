@@ -15,7 +15,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 #[Fillable([
     'user_id', 'airport_code', 'terminal', 'zone_id', 'drop_landmark', 'flight_number',
     'window_start', 'window_end', 'seats', 'luggage_count', 'gender_preference', 'note',
-    'quoted_fare', 'cab_service', 'meeting_point',
+    'quoted_fare', 'cab_service', 'meeting_point', 'is_derived',
 ])]
 class RideRequest extends Model
 {
@@ -43,6 +43,7 @@ class RideRequest extends Model
             'status' => RideRequestStatus::class,
             'gender_preference' => GenderPolicy::class,
             'cab_service' => CabService::class,
+            'is_derived' => 'boolean',
         ];
     }
 

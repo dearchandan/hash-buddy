@@ -188,6 +188,25 @@ class RidesController extends ChangeNotifier {
     return (group: group, joined: response['action'] == 'joined');
   }
 
+  /// Close a ride you opened, for everyone on it.
+  Future<RideGroup> cancelGroup(int groupId) async {
+    final dynamic response = await _api.post('/groups/$groupId/cancel');
+    final RideGroup group = RideGroup.fromJson(response['group'] as Map<String, dynamic>);
+    await refreshHome();
+
+    return group;
+  }
+
+  /// Mark the ride done. Capacity closes at whoever actually came, so the fare
+  /// splits between the people in the cab rather than the seats booked.
+  Future<RideGroup> completeGroup(int groupId) async {
+    final dynamic response = await _api.post('/groups/$groupId/complete');
+    final RideGroup group = RideGroup.fromJson(response['group'] as Map<String, dynamic>);
+    await refreshHome();
+
+    return group;
+  }
+
   Future<RideGroup> leaveGroup(int groupId) async {
     final Map<String, dynamic> response =
         await _api.post('/groups/$groupId/leave') as Map<String, dynamic>;

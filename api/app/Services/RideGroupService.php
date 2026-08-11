@@ -13,11 +13,15 @@ use App\Models\RideGroupMember;
 use App\Models\RideRequest;
 use App\Models\User;
 use App\Push\PushMessage;
+use App\Push\PushSender;
 use Illuminate\Support\Facades\DB;
 
 class RideGroupService
 {
-    public function __construct(private readonly ChatService $chat) {}
+    public function __construct(
+        private readonly ChatService $chat,
+        private readonly PushSender $push,
+    ) {}
 
     /**
      * Turn an open request into a group and make its owner the host.
@@ -156,6 +160,8 @@ class RideGroupService
                 // Not the joiner's to set. They are choosing this specific ride,
                 // so a preference of their own would only contradict it.
                 'gender_preference' => GenderPolicy::Any,
+                // Belongs to this join, not to the traveller. See leave().
+                'is_derived' => true,
             ]);
 
             $request->setRelation('user', $user);
@@ -187,6 +193,170 @@ class RideGroupService
     }
 
     /**
+     * Close a ride you opened, for everyone.
+     *
+     * Host-only, because the host is the person who was going to book the cab —
+     * if they pull out, the ride genuinely is over rather than merely one seat
+     * lighter. Everyone else's request goes back on the market so they can find
+     * another, and they are told rather than left waiting at a kerb.
+     */
+    public function cancel(RideGroup $group, User $user): RideGroup
+    {
+        // Collected inside the transaction, before the members are released:
+        // afterwards activeMembers is empty by design, and notifying from it
+        // would reach nobody precisely when it matters most.
+        [$group, $strandedIds] = DB::transaction(function () use ($group, $user) {
+            $group = RideGroup::query()->whereKey($group->getKey())->lockForUpdate()->firstOrFail();
+
+            // State before permission. Closing releases every member including
+            // the host, so a second attempt would otherwise fail the host check
+            // first and report "you are not the host" about a ride the caller
+            // just closed themselves.
+            $this->guardOpen($group);
+            $this->guardHost($group, $user);
+
+            $members = $group->activeMembers()->with('rideRequest')->get();
+            $stranded = $members->where('user_id', '!=', $user->id)->pluck('user_id')->all();
+
+            foreach ($members as $member) {
+                $this->release($member, reopen: $member->user_id !== $user->id);
+            }
+
+            $group->forceFill([
+                'status' => RideGroupStatus::Cancelled,
+                'cancelled_at' => now(),
+                'seats_taken' => 0,
+                'luggage_total' => 0,
+            ])->save();
+
+            return [$group, $stranded];
+        });
+
+        $this->chat->system($group, ($user->name ?: 'The host').' closed this ride.');
+
+        $this->notify($strandedIds, new PushMessage(
+            type: 'ride.cancelled',
+            title: 'Your ride was closed',
+            body: ($user->name ?: 'The host').' closed the ride. Your request is looking for mates again.',
+            groupId: $group->id,
+        ));
+
+        return $group->load(['zone']);
+    }
+
+    /**
+     * Mark the ride done — you are in the cab and leaving.
+     *
+     * Capacity is clamped to who actually turned up, which is the whole point
+     * of being able to complete an unfilled ride: a two-seater that leaves with
+     * two people splits the fare two ways, not three, and nobody can join a cab
+     * that has already gone.
+     */
+    public function complete(RideGroup $group, User $user): RideGroup
+    {
+        [$group, $riderIds] = DB::transaction(function () use ($group, $user) {
+            $group = RideGroup::query()->whereKey($group->getKey())->lockForUpdate()->firstOrFail();
+
+            $this->guardOpen($group);
+            $this->guardHost($group, $user);
+
+            if ($group->seats_taken < 1) {
+                throw RideException::rideEmpty();
+            }
+
+            $members = $group->activeMembers()->with('rideRequest')->get();
+
+            foreach ($members as $member) {
+                $member->rideRequest?->forceFill([
+                    'status' => RideRequestStatus::Completed,
+                ])->save();
+            }
+
+            $group->forceFill([
+                'status' => RideGroupStatus::Completed,
+                'completed_at' => now(),
+                // Freezes the split at the people who actually came, and closes
+                // the ride to anyone still browsing it. A two-seater that
+                // leaves with two people splits two ways, not three.
+                'max_seats' => $group->seats_taken,
+                'locked_at' => $group->locked_at ?? now(),
+            ])->save();
+
+            return [$group, $members->where('user_id', '!=', $user->id)->pluck('user_id')->all()];
+        });
+
+        $this->chat->system($group, 'Ride completed. Settle up between you.');
+
+        $this->notify($riderIds, new PushMessage(
+            type: 'ride.completed',
+            title: 'Ride completed',
+            body: $group->quoted_fare === null
+                ? 'Safe travels. Settle the fare between you.'
+                : 'Your share is about '.$group->fareShare().' rupees.',
+            groupId: $group->id,
+        ));
+
+        return $group->load(['zone', 'activeMembers.user']);
+    }
+
+    private function guardOpen(RideGroup $group): void
+    {
+        if (in_array($group->status, [RideGroupStatus::Cancelled, RideGroupStatus::Completed], true)) {
+            throw RideException::rideAlreadyClosed();
+        }
+    }
+
+    private function guardHost(RideGroup $group, User $user): void
+    {
+        $isHost = $group->members()
+            ->where('user_id', $user->id)
+            ->where('status', MemberStatus::Joined)
+            ->where('role', MemberRole::Host)
+            ->exists();
+
+        if (! $isHost) {
+            throw RideException::hostOnly();
+        }
+    }
+
+    /**
+     * Take a member off a ride, optionally putting their request back on the
+     * market. Derived requests are always retired — see leave().
+     */
+    private function release(RideGroupMember $member, bool $reopen): void
+    {
+        $member->forceFill([
+            'status' => MemberStatus::Left,
+            'left_at' => now(),
+        ])->save();
+
+        $request = $member->rideRequest;
+
+        if ($request === null || $request->status !== RideRequestStatus::Matched) {
+            return;
+        }
+
+        $request->forceFill($reopen && ! $request->is_derived
+            ? ['status' => RideRequestStatus::Open, 'ride_group_id' => null, 'matched_at' => null]
+            : [
+                'status' => RideRequestStatus::Cancelled,
+                'ride_group_id' => null,
+                'matched_at' => null,
+                'cancelled_at' => now(),
+            ])->save();
+    }
+
+    /**
+     * @param  array<int, int>  $userIds
+     */
+    private function notify(array $userIds, PushMessage $message): void
+    {
+        foreach (User::whereKey($userIds)->get() as $user) {
+            $this->push->send($user, $message);
+        }
+    }
+
+    /**
      * Give up a seat. The traveller's request goes back on the market rather
      * than being thrown away.
      */
@@ -215,11 +385,23 @@ class RideGroupService
             $group->decrement('luggage_total', min($group->luggage_total, $request?->luggage_count ?? 0));
 
             if ($request && $request->status === RideRequestStatus::Matched) {
-                $request->forceFill([
-                    'status' => RideRequestStatus::Open,
-                    'ride_group_id' => null,
-                    'matched_at' => null,
-                ])->save();
+                // A request the traveller typed is an instruction — find me a
+                // ride — so it goes back on the market. One derived to take a
+                // seat while browsing is an implementation detail of that one
+                // join, and reopening it would leave them advertising a trip
+                // they never described.
+                $request->forceFill($request->is_derived
+                    ? [
+                        'status' => RideRequestStatus::Cancelled,
+                        'ride_group_id' => null,
+                        'matched_at' => null,
+                        'cancelled_at' => now(),
+                    ]
+                    : [
+                        'status' => RideRequestStatus::Open,
+                        'ride_group_id' => null,
+                        'matched_at' => null,
+                    ])->save();
             }
 
             $group->refresh();

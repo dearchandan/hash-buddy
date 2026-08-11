@@ -6,6 +6,9 @@ enum RideRequestStatus: string
 {
     case Open = 'open';
     case Matched = 'matched';
+
+    /** The ride happened. Distinct from cancelled, which means it did not. */
+    case Completed = 'completed';
     case Cancelled = 'cancelled';
     case Expired = 'expired';
 

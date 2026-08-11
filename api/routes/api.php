@@ -46,6 +46,9 @@ Route::prefix('v1')->group(function () {
         // Join straight from the browse list, deriving the request from the ride.
         Route::post('groups/{rideGroup}/quick-join', [RideGroupController::class, 'quickJoin']);
         Route::post('groups/{rideGroup}/leave', [RideGroupController::class, 'leave']);
+        // Host only: close the ride for everyone, or mark it done and settle up.
+        Route::post('groups/{rideGroup}/cancel', [RideGroupController::class, 'cancel']);
+        Route::post('groups/{rideGroup}/complete', [RideGroupController::class, 'complete']);
 
         // Push registration
         Route::post('me/devices', [DeviceController::class, 'store']);

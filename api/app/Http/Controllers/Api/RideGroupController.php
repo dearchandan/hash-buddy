@@ -92,6 +92,33 @@ class RideGroupController extends Controller
         ]);
     }
 
+    /**
+     * Close a ride you opened, for everyone on it.
+     */
+    public function cancel(Request $request, RideGroup $rideGroup): JsonResponse
+    {
+        $group = $this->groups->cancel($rideGroup, $request->user());
+
+        return response()->json([
+            'message' => 'Ride closed.',
+            'group' => new RideGroupResource($group),
+        ]);
+    }
+
+    /**
+     * Mark the ride done. Capacity closes at whoever actually came, so an
+     * unfilled ride splits its fare between the people in the cab.
+     */
+    public function complete(Request $request, RideGroup $rideGroup): JsonResponse
+    {
+        $group = $this->groups->complete($rideGroup, $request->user());
+
+        return response()->json([
+            'message' => 'Ride completed.',
+            'group' => new RideGroupResource($group),
+        ]);
+    }
+
     public function leave(Request $request, RideGroup $rideGroup): JsonResponse
     {
         $group = $this->groups->leave($rideGroup, $request->user());

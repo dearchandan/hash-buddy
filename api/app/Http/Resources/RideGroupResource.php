@@ -38,6 +38,13 @@ class RideGroupResource extends JsonResource
             'cab_service' => $this->cab_service?->value,
             'cab_service_label' => $this->cab_service?->label(),
             'is_member' => (bool) $viewerIsMember,
+            // Closing and completing are the host's alone, so the app needs to
+            // know rather than offering buttons that come back 403.
+            'is_host' => $request->user() !== null && $this->members()
+                ->where('user_id', $request->user()->id)
+                ->where('status', 'joined')
+                ->where('role', 'host')
+                ->exists(),
             'fare_estimate' => $this->when(
                 $this->relationLoaded('zone') && $this->zone !== null,
                 fn () => app(FareEstimator::class)

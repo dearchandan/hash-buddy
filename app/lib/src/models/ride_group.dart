@@ -38,6 +38,7 @@ class RideGroup {
     required this.seatsAvailable,
     required this.genderPolicy,
     required this.isMember,
+    required this.isHost,
     required this.members,
     this.zone,
     this.meetingPoint,
@@ -59,6 +60,7 @@ class RideGroup {
         seatsAvailable: json['seats_available'] as int? ?? 0,
         genderPolicy: json['gender_policy'] as String? ?? 'any',
         isMember: json['is_member'] as bool? ?? false,
+        isHost: json['is_host'] as bool? ?? false,
         meetingPoint: json['meeting_point'] as String?,
         quotedFare: json['quoted_fare'] as int?,
         fareShare: json['fare_share'] as int?,
@@ -84,6 +86,10 @@ class RideGroup {
   final int seatsAvailable;
   final String genderPolicy;
   final bool isMember;
+
+  /// Closing and completing belong to whoever opened the ride, so the app only
+  /// offers those buttons to them rather than letting the server 403.
+  final bool isHost;
   final List<RideGroupMember> members;
   final Zone? zone;
   final String? meetingPoint;

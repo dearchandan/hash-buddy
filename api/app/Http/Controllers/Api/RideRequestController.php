@@ -52,6 +52,22 @@ class RideRequestController extends Controller
             throw RideException::tooManyOpenRequests($max);
         }
 
+        // Two identical open requests do nothing but clutter the home screen
+        // and match the same rides twice. Overlapping windows are legitimate —
+        // people really do keep their options open — so only an exact repeat of
+        // the same trip is refused.
+        $duplicate = $user->rideRequests()
+            ->where('status', RideRequestStatus::Open)
+            ->where('terminal', $request->validated('terminal'))
+            ->where('zone_id', $request->validated('zone_id'))
+            ->whereDate('window_start', $request->date('window_start'))
+            ->whereTime('window_start', $request->date('window_start')->format('H:i:s'))
+            ->exists();
+
+        if ($duplicate) {
+            throw RideException::duplicateRequest();
+        }
+
         $rideRequest = $user->rideRequests()->create($request->validated());
 
         // ->response() rather than response()->json() so the payload keeps the

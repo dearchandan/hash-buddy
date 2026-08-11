@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Enums\Gender;
 use App\Enums\MemberStatus;
+use App\Enums\RideGroupStatus;
 use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
@@ -53,13 +54,20 @@ class User extends Authenticatable
     }
 
     /**
-     * Groups the user currently holds a seat in.
+     * Rides the user is currently on and that are still happening.
+     *
+     * Closed and completed rides are excluded rather than merely styled
+     * differently: once a ride is over it is not something the traveller can
+     * act on, and leaving it on the home screen makes a finished trip look
+     * like a live one.
      */
     public function activeGroups()
     {
-        return RideGroup::query()->whereIn(
-            'id',
-            $this->memberships()->where('status', MemberStatus::Joined)->select('ride_group_id')
-        );
+        return RideGroup::query()
+            ->whereIn(
+                'id',
+                $this->memberships()->where('status', MemberStatus::Joined)->select('ride_group_id')
+            )
+            ->whereNotIn('status', [RideGroupStatus::Cancelled, RideGroupStatus::Completed]);
     }
 }
