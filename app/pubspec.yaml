@@ -17,7 +17,12 @@ dependencies:
 
   # Voice calls. Audio is peer-to-peer, so no traveller ever learns another's
   # phone number and the server carries only the offer and the answer.
-  flutter_webrtc: ^0.12.5
+  # 1.x or newer: the 0.12 line compiles against android-31, while its own
+  # androidx dependencies require 34+, so the build fails outright.
+  flutter_webrtc: ^1.6.0
+  # Held at 11.x deliberately. 13.x compiles against android-37, a preview SDK
+  # that Gradle cannot even resolve from a normal install, and nothing in this
+  # app needs an API newer than 11.x already covers.
   permission_handler: ^11.3.1
 
   # Push. Chat without it is worse than no chat: the sender believes they made
