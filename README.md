@@ -28,6 +28,11 @@ tapping "join" on the last seat cannot both get it. The group narrows its
 departure window to the intersection of its members' windows and locks when full.
 Leaving frees the seat, reopens the request, and hands the host role on.
 
+**Meet at the kerb.** Sharing a ride opens a group chat and a voice call, so two
+strangers can actually find each other. Calls are peer-to-peer, so no phone
+number is ever revealed. See [Chat and calls](#chat-and-calls) — push and a TURN
+relay both need setting up.
+
 | | |
 |---|---|
 | Auth | Phone + OTP, Sanctum bearer tokens |
@@ -170,25 +175,111 @@ storeFile=D:/keys/hashbuddy-release.jks
 debug manifest, so `--dart-define` must point at an HTTPS host. For a quick test
 on your own wifi before you have one, build `--debug` and use your LAN IP.
 
+## Chat and calls
+
+Once travellers share a ride they get a group chat and a voice call. Both open
+on joining and close with the ride — they are not a way to contact someone you
+merely matched with, and `PublicUserResource` still withholds phone numbers.
+
+**Chat** polls a cursor (`GET /groups/{id}/messages?after=<id>`) rather than
+holding a socket. With push carrying the "you have a message" signal, the only
+job left is filling in a thread someone is already looking at, and four seconds
+of latency is invisible for *"I'm at gate 4"*. That also keeps a Reverb daemon
+off a 908 MB instance. The API shape does not change if you later move to
+websockets.
+
+**Calls** are peer-to-peer WebRTC. Audio never touches the server, so a call
+costs two API requests and no traveller learns another's number. ICE candidates
+are gathered fully before the offer is sent rather than trickled — that costs a
+second or two of setup and buys a signalling path that survives push delivery
+jitter without a socket anywhere.
+
+### Two things must be set up, and neither can be done from the repo
+
+**1. Firebase, for push.** Chat without it is worse than no chat: the sender
+believes they made contact when nobody was told. It also carries call invites.
+
+```
+console.firebase.google.com → Add project
+  → Add app → Android → package name  com.agilemania.hashbuddy
+  → download google-services.json  →  app/android/app/google-services.json
+```
+
+Then add the Gradle plugin — `app/android/settings.gradle.kts`:
+
+```kotlin
+id("com.google.gms.google-services") version "4.4.2" apply false
+```
+
+…and `app/android/app/build.gradle.kts`:
+
+```kotlin
+id("com.google.gms.google-services")
+```
+
+For the server, Firebase Console → *Project settings* → *Service accounts* →
+**Generate new private key**. Put the JSON on the box **outside** the repo, then:
+
+```env
+HASHBUDDY_PUSH_DRIVER=fcm
+FCM_PROJECT_ID=your-project-id
+FCM_CREDENTIALS_PATH=/etc/hash-buddy/fcm.json
+```
+
+`chmod 600` it and own it by `www-data` — that file can send push to every
+install you have. Until all of this exists the driver stays `log`, which writes
+what it would have sent; the app detects the missing config and disables push
+rather than crashing.
+
+**The API URL and the Firebase config are both baked in at build time**, so
+adding `google-services.json` means rebuilding the APK.
+
+**2. Security group, for the TURN relay.** [`deploy/turn.sh`](deploy/turn.sh)
+installs and configures coturn, but deliberately does not touch AWS — what is
+exposed to the internet belongs in the console, not buried in a shell script.
+
+| Port | Protocol | Why |
+|---|---|---|
+| 3478 | UDP | TURN control |
+| 3478 | TCP | TURN over TCP, for wifi that blocks UDP |
+| 49160-49200 | UDP | media relay |
+
+This is not optional. Indian mobile carriers put subscribers behind
+carrier-grade NAT, where neither handset can open a path to the other and STUN
+has nothing to discover. Two testers on the same wifi will connect without it
+and everything will look fine; the same two on 4G usually will not. The app says
+so on the call screen when no relay is configured, because that failure is
+otherwise silent and reads as a broken app.
+
+Verify with `GET /api/v1/calls/ice-servers`, then paste the returned URL and
+credentials into <https://icetest.info>. A `relay` candidate means it works.
+
 ## Permissions
 
-The release APK declares exactly one permission: `INTERNET`. Nothing in the app
-uses location or Bluetooth — travellers pick a drop zone from a list — and an
-unused permission costs install conversion and a Play Console declaration for
+The release APK declares three permissions it actually exercises:
+
+| Permission | Used for | Asked |
+|---|---|---|
+| `INTERNET` | the API | install time |
+| `RECORD_AUDIO` | voice calls | when you tap call, with the reason on screen |
+| `POST_NOTIFICATIONS` | chat and call invites (Android 13+) | first launch |
+
+`RECORD_AUDIO` is requested at the point of use rather than on launch, where it
+reads as a demand and gets denied. `MODIFY_AUDIO_SETTINGS` and `WAKE_LOCK` come
+with it but are not runtime permissions. Still no location and no Bluetooth:
+travellers pick a drop zone from a list, and calls go over the data connection.
+An unused permission costs install conversion and a Play Console declaration for
 no benefit.
 
-If that changes, the order of need is:
+If more are ever needed, the order is:
 
-1. **`POST_NOTIFICATIONS`** (Android 13+). This is the one you will actually
-   want first: without push, two lone travellers only pair when one opens a ride
-   and the other happens to look again.
-2. **`ACCESS_COARSE_LOCATION`**, foreground only, if you add live location
+1. **`ACCESS_COARSE_LOCATION`**, foreground only, if you add live location
    between already-matched travellers to solve the kerb rendezvous, or a geofence
    that notices someone has landed at BLR. Ask at the point of use with a
    rationale, not on launch. Prefer coarse — a zone-level product does not need
    `ACCESS_FINE_LOCATION`. Never request background location: it triggers a
    special Play review this use case will not survive.
-3. **Bluetooth** — no justified use. BLE proximity at the kerb is worse than a
+2. **Bluetooth** — no justified use. BLE proximity at the kerb is worse than a
    map plus a message, and `BLUETOOTH_SCAN` invites scrutiny you gain nothing from.
 
 Any of these requires a Play Console **Data safety** declaration and a published
@@ -216,6 +307,19 @@ All routes are prefixed `/api/v1`. Single resources come back wrapped in `data`.
 | `GET` | `/groups/{id}` | Ride detail |
 | `POST` | `/groups/{id}/join` | **Join a ride** |
 | `POST` | `/groups/{id}/leave` | Give up your seat |
+| `GET` `POST` | `/groups/{id}/messages` | Chat: read (`?after=`) / send |
+| `POST` | `/groups/{id}/messages/read` | Advance your read cursor |
+| `GET` | `/messages/unread` | Unread counts for badges |
+| `POST` `DELETE` | `/me/devices` | Register / drop a push token |
+| `GET` | `/calls/ice-servers` | STUN + short-lived TURN credentials |
+| `POST` | `/groups/{id}/calls` | Ring a ride mate (with your SDP offer) |
+| `GET` | `/groups/{id}/calls/current` | Poll for a live call |
+| `POST` | `/calls/{id}/accept` | Answer, returning your SDP answer |
+| `POST` | `/calls/{id}/decline` `/hang-up` | End it |
+
+Chat and call routes answer **404** to anyone who is not on the ride, rather than
+403, so probing group ids cannot distinguish a ride you are barred from from one
+that never existed.
 
 Domain failures return a stable `error` code alongside the message —
 `group_full`, `already_member`, `window_mismatch`, `gender_policy`,
@@ -231,11 +335,6 @@ group capacity, and the sedan/SUV thresholds.
 
 Deliberately out of scope for this slice, roughly in the order they will matter:
 
-- **Notifications.** Two lone travellers currently only pair when one opens a
-  ride and the other checks their matches again. Push closes that loop and is the
-  single biggest functional gap.
-- **In-app chat**, so travellers coordinate the kerb rendezvous without swapping
-  phone numbers.
 - **Ratings after a ride.** The columns exist and are read by the ranker; nothing
   writes to them yet.
 - **Trust and safety operations** — reporting, blocking, and a human on call.
