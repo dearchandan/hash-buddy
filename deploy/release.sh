@@ -115,8 +115,16 @@ FAILED=0
 check() {
     local path="$1" expected="$2"
     local code
-    code="$(curl -s -o /dev/null -w '%{http_code}' -H "Host: ${HOST_HEADER}" \
-        "http://127.0.0.1${path}")"
+    # Follows redirects and pins both ports to localhost. Once certbot installs
+    # the HTTPS redirect, a plain http check on 127.0.0.1 returns 301 and a
+    # perfectly healthy deploy reports itself as failed — which is worse than no
+    # check at all, because it trains you to ignore the one that matters.
+    # --resolve rather than a Host header so SNI matches and the certificate is
+    # verified too.
+    code="$(curl -s -o /dev/null -w '%{http_code}' -L \
+        --resolve "${HOST_HEADER}:80:127.0.0.1" \
+        --resolve "${HOST_HEADER}:443:127.0.0.1" \
+        "http://${HOST_HEADER}${path}")"
     if [[ "$code" == "$expected" ]]; then
         printf '  ok    %-24s %s\n' "$path" "$code"
     else
