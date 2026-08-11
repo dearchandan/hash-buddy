@@ -106,8 +106,10 @@ class _ChatViewState extends State<_ChatView> {
                   : others.map((RideGroupMember m) => m.user.name).join(', '),
               style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700),
             ),
+            // The ride code is the subtitle only when the title is showing
+            // names; alone on a ride it would just repeat the line above it.
             Text(
-              'Ride ${widget.group.code}',
+              others.isEmpty ? 'Waiting for a ride mate' : 'Ride ${widget.group.code}',
               style: TextStyle(fontSize: 12, color: scheme.onSurfaceVariant),
             ),
           ],

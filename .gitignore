@@ -13,3 +13,9 @@
 Thumbs.db
 .idea/
 .vscode/
+
+# Firebase credentials — this file can send push to every install you have.
+google-services.json
+GoogleService-Info.plist
+fcm*.json
+service-account*.json
