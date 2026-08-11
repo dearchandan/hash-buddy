@@ -47,6 +47,12 @@ class OpenRideResource extends JsonResource
             'meeting_point' => $this->meeting_point,
 
             'is_women_only' => $this->gender_policy->value === 'women_only',
+
+            // Your own rides show up in the browse list like anyone else's, and
+            // without this the app offers you a Join button that can only fail
+            // with already_member.
+            'is_member' => $request->user() !== null
+                && $this->activeMembers->contains('user_id', $request->user()->id),
             'members' => RideGroupMemberResource::collection($this->whenLoaded('activeMembers')),
 
             'created_at' => $this->created_at?->toIso8601String(),

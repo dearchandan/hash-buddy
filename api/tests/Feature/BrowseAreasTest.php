@@ -147,6 +147,23 @@ class BrowseAreasTest extends TestCase
         $this->assertNull($ride['cab_service']);
     }
 
+    public function test_the_listing_marks_rides_you_are_already_on(): void
+    {
+        $me = User::factory()->create();
+        $mine = $this->ride($this->koramangala, user: $me, maxSeats: 3);
+        $theirs = $this->ride($this->koramangala, maxSeats: 3);
+
+        Sanctum::actingAs($me);
+
+        $rides = collect($this->getJson("/api/v1/zones/{$this->koramangala->id}/open-rides")->json('data'))
+            ->keyBy('id');
+
+        // Otherwise the browse list offers you a Join button on your own ride
+        // that can only ever fail with already_member.
+        $this->assertTrue($rides[$mine->id]['is_member']);
+        $this->assertFalse($rides[$theirs->id]['is_member']);
+    }
+
     public function test_the_listing_never_exposes_a_phone_number(): void
     {
         $this->ride($this->koramangala, user: User::factory()->create(['phone' => '+919812345678']));

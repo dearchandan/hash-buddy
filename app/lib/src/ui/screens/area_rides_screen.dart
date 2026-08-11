@@ -165,17 +165,26 @@ class _AreaRidesScreenState extends State<AreaRidesScreen> {
         ride: _rides![index],
         busy: _joining,
         onJoin: () => _join(_rides![index]),
+        onOpen: () => Navigator.of(context).push(
+          MaterialPageRoute<void>(builder: (_) => GroupScreen(groupId: _rides![index].id)),
+        ),
       ),
     );
   }
 }
 
 class _RideCard extends StatelessWidget {
-  const _RideCard({required this.ride, required this.busy, required this.onJoin});
+  const _RideCard({
+    required this.ride,
+    required this.busy,
+    required this.onJoin,
+    required this.onOpen,
+  });
 
   final OpenRide ride;
   final bool busy;
   final VoidCallback onJoin;
+  final VoidCallback onOpen;
 
   @override
   Widget build(BuildContext context) {
@@ -255,10 +264,17 @@ class _RideCard extends StatelessWidget {
           const SizedBox(height: 12),
           _FareLine(ride: ride),
           const SizedBox(height: 12),
-          FilledButton(
-            onPressed: busy ? null : onJoin,
-            child: const Text('Join this ride'),
-          ),
+          if (ride.isMember)
+            OutlinedButton.icon(
+              onPressed: onOpen,
+              icon: const Icon(Icons.arrow_forward_rounded, size: 18),
+              label: const Text('You are on this ride'),
+            )
+          else
+            FilledButton(
+              onPressed: busy ? null : onJoin,
+              child: const Text('Join this ride'),
+            ),
         ],
       ),
     );

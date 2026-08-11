@@ -13,6 +13,7 @@ class OpenRide {
     required this.maxSeats,
     required this.seatsAvailable,
     required this.isWomenOnly,
+    required this.isMember,
     required this.members,
     this.zone,
     this.quotedFare,
@@ -31,6 +32,7 @@ class OpenRide {
         maxSeats: json['max_seats'] as int? ?? 0,
         seatsAvailable: json['seats_available'] as int? ?? 0,
         isWomenOnly: json['is_women_only'] as bool? ?? false,
+        isMember: json['is_member'] as bool? ?? false,
         zone: json['zone'] is Map<String, dynamic>
             ? Zone.fromJson(json['zone'] as Map<String, dynamic>)
             : null,
@@ -53,6 +55,10 @@ class OpenRide {
   final int maxSeats;
   final int seatsAvailable;
   final bool isWomenOnly;
+
+  /// Your own rides appear here alongside everyone else's; the list offers to
+  /// open them rather than to join them again.
+  final bool isMember;
   final Zone? zone;
   final List<RideGroupMember> members;
 
