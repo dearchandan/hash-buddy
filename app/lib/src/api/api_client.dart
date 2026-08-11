@@ -23,7 +23,11 @@ class ApiClient {
 
   Future<dynamic> patch(String path, {Map<String, dynamic>? body}) => _send('PATCH', path, body: body);
 
-  Future<dynamic> delete(String path) => _send('DELETE', path);
+  /// DELETE carries a body for endpoints that identify the thing to remove by
+  /// value rather than by id — unregistering a push token, for one, where the
+  /// token has no business sitting in a URL and being written to access logs.
+  Future<dynamic> delete(String path, {Map<String, dynamic>? body}) =>
+      _send('DELETE', path, body: body);
 
   Future<dynamic> _send(
     String method,
@@ -49,7 +53,7 @@ class ApiClient {
         'GET' => await _http.get(uri, headers: headers),
         'POST' => await _http.post(uri, headers: headers, body: payload),
         'PATCH' => await _http.patch(uri, headers: headers, body: payload),
-        'DELETE' => await _http.delete(uri, headers: headers),
+        'DELETE' => await _http.delete(uri, headers: headers, body: payload),
         _ => throw ArgumentError('Unsupported method $method'),
       };
     } on http.ClientException {

@@ -109,4 +109,88 @@ return [
         'sedan_max_luggage' => 3,
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | Chat
+    |--------------------------------------------------------------------------
+    |
+    | Group chat opens once travellers share a ride and closes when the ride
+    | does. Delivery is a polling cursor rather than a socket: without a live
+    | connection to keep alive it costs nothing when nobody is looking, and a
+    | few seconds of latency is invisible for "I'm at gate 4, black jacket".
+    |
+    */
+
+    'chat' => [
+        'poll_seconds' => 4,
+        'page_size' => 50,
+        'max_length' => 1000,
+        // Per minute, per traveller. Generous for coordinating a kerb pickup,
+        // tight enough that a compromised token cannot flood a stranger.
+        'rate_limit_per_minute' => 30,
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Voice calls
+    |--------------------------------------------------------------------------
+    |
+    | Peer-to-peer WebRTC: audio never touches the server, and no traveller ever
+    | learns another's phone number. STUN alone is not enough — Indian mobile
+    | carriers sit behind symmetric NAT, where the only route between two
+    | handsets is a TURN relay. Leaving TURN unconfigured does not degrade
+    | gracefully; it fails for a large share of real calls.
+    |
+    */
+
+    'calls' => [
+        'enabled' => env('HASHBUDDY_CALLS_ENABLED', true),
+        // How long an unanswered call rings before it is marked missed.
+        'ring_seconds' => (int) env('HASHBUDDY_CALL_RING_SECONDS', 45),
+        // Poll interval while a call is being set up or is ringing.
+        'poll_seconds' => 2,
+
+        'stun_urls' => array_values(array_filter(array_map('trim', explode(
+            ',',
+            (string) env('HASHBUDDY_STUN_URLS', 'stun:stun.l.google.com:19302'),
+        )))),
+
+        'turn' => [
+            'urls' => array_values(array_filter(array_map('trim', explode(
+                ',',
+                (string) env('HASHBUDDY_TURN_URLS', ''),
+            )))),
+            // Long-term credential mechanism (RFC 5389). The shared secret never
+            // leaves the server; clients receive a short-lived derived username
+            // and password so a leaked APK cannot be used to relay traffic
+            // indefinitely.
+            'secret' => env('HASHBUDDY_TURN_SECRET'),
+            'credential_ttl_seconds' => (int) env('HASHBUDDY_TURN_TTL', 3600),
+        ],
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Push notifications
+    |--------------------------------------------------------------------------
+    |
+    | Chat without push is close to useless: a message nobody is told about is
+    | worse than no message, because the sender believes they made contact.
+    | Push also carries call invites, which is why signalling needs no socket.
+    |
+    | The 'log' driver writes what it would have sent, so the whole feature runs
+    | and tests pass before Firebase credentials exist.
+    |
+    */
+
+    'push' => [
+        'driver' => env('HASHBUDDY_PUSH_DRIVER', 'log'),
+        'fcm' => [
+            'project_id' => env('FCM_PROJECT_ID'),
+            // Absolute path to the service-account JSON. Kept outside the repo
+            // and never committed: it can send push to every install you have.
+            'credentials' => env('FCM_CREDENTIALS_PATH'),
+        ],
+    ],
+
 ];

@@ -85,6 +85,16 @@ class RideGroup extends Model
         return $this->hasMany(RideRequest::class);
     }
 
+    public function messages(): HasMany
+    {
+        return $this->hasMany(Message::class);
+    }
+
+    public function calls(): HasMany
+    {
+        return $this->hasMany(CallSession::class);
+    }
+
     public function scopeForming(Builder $query): Builder
     {
         return $query->where('status', RideGroupStatus::Forming);

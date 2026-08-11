@@ -42,6 +42,11 @@ class User extends Authenticatable
         return $this->hasMany(RideGroupMember::class);
     }
 
+    public function deviceTokens(): HasMany
+    {
+        return $this->hasMany(DeviceToken::class);
+    }
+
     public function isBlocked(): bool
     {
         return $this->blocked_at !== null;

@@ -84,6 +84,36 @@ class RideException extends Exception
         return new self('Your account cannot join rides right now.', 'user_blocked', 403);
     }
 
+    public static function chatClosed(): self
+    {
+        return new self('This ride is over, so its chat is closed.', 'chat_closed', 409);
+    }
+
+    public static function callsDisabled(): self
+    {
+        return new self('Calling is not available right now.', 'calls_disabled', 503);
+    }
+
+    public static function callTargetNotMember(): self
+    {
+        return new self('That traveller is not on this ride.', 'call_target_not_member', 404);
+    }
+
+    public static function callAlreadyLive(): self
+    {
+        return new self('There is already a call in progress on this ride.', 'call_already_live', 409);
+    }
+
+    public static function callNotRinging(): self
+    {
+        return new self('This call is no longer ringing.', 'call_not_ringing', 409);
+    }
+
+    public static function cannotCallYourself(): self
+    {
+        return new self('You cannot call yourself.', 'cannot_call_yourself');
+    }
+
     public function render(Request $request): JsonResponse
     {
         return response()->json([

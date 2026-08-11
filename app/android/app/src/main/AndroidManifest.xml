@@ -1,10 +1,25 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <uses-permission android:name="android.permission.INTERNET"/>
 
-    <!-- No location or Bluetooth permission is declared, because nothing in the
-         app uses either. Travellers pick a drop zone from a list. Adding a
-         permission you do not exercise costs you install conversion and a Play
-         Console declaration for no benefit. -->
+    <!-- Voice calls between ride mates. Requested at the moment someone taps
+         call, with the reason on screen — never on launch, where it reads as a
+         demand and gets denied. -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO"/>
+    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS"/>
+
+    <!-- Android 13+ only. Without it a matched traveller never learns they have
+         a ride mate, which is the single thing that makes the product work. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
+
+    <!-- Still no location or Bluetooth: nothing in the app uses either.
+         Travellers pick a drop zone from a list, and calls go over the data
+         connection rather than to a nearby device. A permission you do not
+         exercise costs install conversion and a Play Console declaration for no
+         benefit. -->
+
+    <!-- A handset with no microphone should still be able to install and use
+         chat; only calling is unavailable. -->
+    <uses-feature android:name="android.hardware.microphone" android:required="false"/>
 
     <application
         android:label="Hash Buddy"

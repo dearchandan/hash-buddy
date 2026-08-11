@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../api/api_client.dart';
+import '../push/push_service.dart';
 import '../state/auth_controller.dart';
 import '../state/rides_controller.dart';
 import 'screens/home_screen.dart';
@@ -23,6 +24,13 @@ class HashBuddyApp extends StatelessWidget {
         ),
         ChangeNotifierProvider<RidesController>(
           create: (BuildContext context) => RidesController(context.read<ApiClient>()),
+        ),
+        // Started eagerly so a call invite can arrive before any ride screen is
+        // open. Safe when Firebase is unconfigured: it disables itself.
+        Provider<PushService>(
+          create: (BuildContext context) => PushService(context.read<ApiClient>())..start(),
+          dispose: (_, PushService service) => service.dispose(),
+          lazy: false,
         ),
       ],
       child: MaterialApp(

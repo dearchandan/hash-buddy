@@ -12,10 +12,13 @@ use App\Models\RideGroup;
 use App\Models\RideGroupMember;
 use App\Models\RideRequest;
 use App\Models\User;
+use App\Push\PushMessage;
 use Illuminate\Support\Facades\DB;
 
 class RideGroupService
 {
+    public function __construct(private readonly ChatService $chat) {}
+
     /**
      * Turn an open request into a group and make its owner the host.
      */
@@ -102,8 +105,32 @@ class RideGroupService
             $this->narrowWindow($group, $request);
             $this->lockIfFull($group);
 
+            $this->announceJoin($group, $request->user);
+
             return $member;
         });
+    }
+
+    /**
+     * Tell the people already aboard that someone took a seat.
+     *
+     * This is the notification that makes the product work. Without it a lone
+     * traveller only discovers they have been matched by opening the app and
+     * looking again, which nobody does while walking through an airport.
+     */
+    private function announceJoin(RideGroup $group, ?User $joiner): void
+    {
+        $name = $joiner?->name ?: 'Someone';
+
+        $this->chat->system($group, "{$name} joined the ride.");
+
+        $this->chat->notifyOthers($group, $joiner?->id ?? 0, new PushMessage(
+            type: 'ride.joined',
+            data: ['user_id' => (string) ($joiner?->id ?? 0)],
+            title: 'You have a ride mate',
+            body: "{$name} is sharing your cab. Say hello and agree where to meet.",
+            groupId: $group->id,
+        ));
     }
 
     /**

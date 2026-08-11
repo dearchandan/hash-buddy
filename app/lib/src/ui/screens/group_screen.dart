@@ -9,6 +9,7 @@ import '../widgets/app_card.dart';
 import '../widgets/fare_summary.dart';
 import '../widgets/info_chip.dart';
 import '../widgets/traveller_avatar.dart';
+import 'chat_screen.dart';
 
 class GroupScreen extends StatefulWidget {
   const GroupScreen({required this.groupId, super.key});
@@ -89,6 +90,17 @@ class _GroupScreenState extends State<GroupScreen> {
       appBar: AppBar(
         title: Text(group == null ? 'Ride' : 'Ride ${group.code}'),
       ),
+      // Only once there is someone to talk to. A chat button on a ride you are
+      // sitting in alone leads to an empty room and looks broken.
+      floatingActionButton: group != null && group.isMember && !group.isCancelled
+          ? FloatingActionButton.extended(
+              onPressed: () => Navigator.of(context).push(
+                MaterialPageRoute<void>(builder: (_) => ChatScreen(group: group)),
+              ),
+              icon: const Icon(Icons.forum_rounded),
+              label: const Text('Chat & call'),
+            )
+          : null,
       body: _error != null
           ? Center(child: Text(errorMessage(_error!)))
           : group == null

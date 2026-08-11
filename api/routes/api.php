@@ -1,6 +1,9 @@
 <?php
 
 use App\Http\Controllers\Api\AuthController;
+use App\Http\Controllers\Api\CallController;
+use App\Http\Controllers\Api\DeviceController;
+use App\Http\Controllers\Api\MessageController;
 use App\Http\Controllers\Api\RideGroupController;
 use App\Http\Controllers\Api\RideRequestController;
 use App\Http\Controllers\Api\ZoneController;
@@ -38,5 +41,28 @@ Route::prefix('v1')->group(function () {
         // Join / leave a ride
         Route::post('groups/{rideGroup}/join', [RideGroupController::class, 'join']);
         Route::post('groups/{rideGroup}/leave', [RideGroupController::class, 'leave']);
+
+        // Push registration
+        Route::post('me/devices', [DeviceController::class, 'store']);
+        Route::delete('me/devices', [DeviceController::class, 'destroy']);
+
+        // Chat, for travellers who already share a ride
+        Route::get('messages/unread', [MessageController::class, 'unread']);
+        Route::get('groups/{rideGroup}/messages', [MessageController::class, 'index']);
+        Route::post('groups/{rideGroup}/messages/read', [MessageController::class, 'markRead']);
+        // Throttled separately from the read path: polling every few seconds is
+        // normal and must never be what exhausts the send budget.
+        Route::post('groups/{rideGroup}/messages', [MessageController::class, 'store'])
+            ->middleware('throttle:chat');
+
+        // Voice calls
+        Route::get('calls/ice-servers', [CallController::class, 'iceServers']);
+        Route::get('groups/{rideGroup}/calls/current', [CallController::class, 'current']);
+        Route::post('groups/{rideGroup}/calls', [CallController::class, 'start'])
+            ->middleware('throttle:calls');
+        Route::get('calls/{call}', [CallController::class, 'show']);
+        Route::post('calls/{call}/accept', [CallController::class, 'accept']);
+        Route::post('calls/{call}/decline', [CallController::class, 'decline']);
+        Route::post('calls/{call}/hang-up', [CallController::class, 'hangUp']);
     });
 });

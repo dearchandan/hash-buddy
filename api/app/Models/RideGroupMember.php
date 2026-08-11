@@ -9,7 +9,10 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
-#[Fillable(['ride_group_id', 'user_id', 'ride_request_id', 'role', 'status', 'seats', 'joined_at', 'left_at'])]
+#[Fillable([
+    'ride_group_id', 'user_id', 'ride_request_id', 'role', 'status', 'seats',
+    'joined_at', 'left_at', 'last_read_message_id',
+])]
 class RideGroupMember extends Model
 {
     use HasFactory;
@@ -19,6 +22,7 @@ class RideGroupMember extends Model
         'role' => 'member',
         'status' => 'joined',
         'seats' => 1,
+        'last_read_message_id' => 0,
     ];
 
     protected function casts(): array
