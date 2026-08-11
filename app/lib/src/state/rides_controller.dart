@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 
 import '../api/api_client.dart';
 import '../models/match_candidate.dart';
+import '../models/open_ride.dart';
 import '../models/ride_group.dart';
 import '../models/ride_request.dart';
 import '../models/zone.dart';
@@ -12,11 +13,13 @@ class RidesController extends ChangeNotifier {
   final ApiClient _api;
 
   List<Zone> _zones = <Zone>[];
+  List<Area> _areas = <Area>[];
   List<RideRequest> _myRequests = <RideRequest>[];
   List<RideGroup> _myGroups = <RideGroup>[];
   bool _loading = false;
 
   List<Zone> get zones => _zones;
+  List<Area> get areas => _areas;
   List<RideRequest> get myRequests => _myRequests;
   List<RideGroup> get myGroups => _myGroups;
   bool get loading => _loading;
@@ -62,6 +65,9 @@ class RidesController extends ChangeNotifier {
     String? flightNumber,
     String? dropLandmark,
     String? note,
+    int? quotedFare,
+    String? cabService,
+    String? meetingPoint,
   }) async {
     final RideRequest created = RideRequest.fromJson(ApiClient.unwrap(
       await _api.post('/ride-requests', body: <String, dynamic>{
@@ -75,6 +81,11 @@ class RidesController extends ChangeNotifier {
         if (flightNumber != null && flightNumber.isNotEmpty) 'flight_number': flightNumber,
         if (dropLandmark != null && dropLandmark.isNotEmpty) 'drop_landmark': dropLandmark,
         if (note != null && note.isNotEmpty) 'note': note,
+        // Omitted rather than sent null when the traveller skipped them, so a
+        // blank field never overwrites something with nothing.
+        if (quotedFare != null) 'quoted_fare': quotedFare,
+        if (cabService != null) 'cab_service': cabService,
+        if (meetingPoint != null && meetingPoint.isNotEmpty) 'meeting_point': meetingPoint,
       }),
     ));
 
@@ -82,6 +93,50 @@ class RidesController extends ChangeNotifier {
     notifyListeners();
 
     return created;
+  }
+
+  /// Areas people are already heading to, for the home screen.
+  ///
+  /// Deliberately not part of refreshHome's Future.wait: it is the one call
+  /// that must not fail the whole screen. A traveller with their own rides on
+  /// display should still see them if this errors.
+  Future<void> loadAreas() async {
+    try {
+      _areas = ApiClient.unwrapList(await _api.get('/areas')).map(Area.fromJson).toList();
+    } catch (_) {
+      _areas = <Area>[];
+    }
+    notifyListeners();
+  }
+
+  /// Every ride heading to one area that still has a seat.
+  Future<List<OpenRide>> openRidesIn(int zoneId, {String? terminal}) async {
+    final dynamic response = await _api.get(
+      '/zones/$zoneId/open-rides',
+      query: <String, String>{if (terminal != null) 'terminal': terminal},
+    );
+
+    return ApiClient.unwrapList(response).map(OpenRide.fromJson).toList();
+  }
+
+  /// Take a seat in a ride found by browsing.
+  ///
+  /// No terminal, zone or window: all of that is already on the ride, and
+  /// asking again would be asking someone to describe the trip on their screen.
+  Future<RideGroup> quickJoin({
+    required int groupId,
+    int seats = 1,
+    int luggageCount = 1,
+  }) async {
+    final dynamic response = await _api.post(
+      '/groups/$groupId/quick-join',
+      body: <String, dynamic>{'seats': seats, 'luggage_count': luggageCount},
+    );
+
+    final RideGroup group = RideGroup.fromJson(response['group'] as Map<String, dynamic>);
+    await refreshHome();
+
+    return group;
   }
 
   /// Find mates for a request.

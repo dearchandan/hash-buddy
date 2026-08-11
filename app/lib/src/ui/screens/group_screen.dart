@@ -153,12 +153,48 @@ class _GroupScreenState extends State<GroupScreen> {
         ),
         const SizedBox(height: 16),
 
-        if (group.fareEstimate != null) ...<Widget>[
+        // A fare the host actually saw beats our seeded estimate every time, so
+        // it takes the slot and the estimate steps aside rather than both
+        // competing for the traveller's attention with different numbers.
+        if (group.hasQuotedFare) ...<Widget>[
+          AppCard(
+            child: Row(
+              children: <Widget>[
+                Icon(Icons.payments_rounded, color: scheme.primary),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
+                      Text(
+                        '${rupees(group.fareShare ?? group.quotedFare!)} each',
+                        style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+                      ),
+                      Text(
+                        '${rupees(group.quotedFare!)} total'
+                        '${group.cabServiceLabel == null ? '' : ' on ${group.cabServiceLabel}'}'
+                        ' · quoted by the host',
+                        style: TextStyle(fontSize: 12, color: scheme.onSurfaceVariant),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Hash Buddy does not book the cab — one of you books it and the rest '
+            'settle up directly.',
+            style: TextStyle(fontSize: 12, color: scheme.onSurfaceVariant),
+          ),
+          const SizedBox(height: 20),
+        ] else if (group.fareEstimate != null) ...<Widget>[
           FareSummary(fare: group.fareEstimate!),
           const SizedBox(height: 8),
           Text(
-            'An estimate for planning. Hash Buddy does not book the cab — one of you '
-            'books it and the rest settle up directly.',
+            'An estimate for planning, not a quote. Hash Buddy does not book the '
+            'cab — one of you books it and the rest settle up directly.',
             style: TextStyle(fontSize: 12, color: scheme.onSurfaceVariant),
           ),
           const SizedBox(height: 20),

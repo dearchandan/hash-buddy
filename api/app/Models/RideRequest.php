@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Enums\CabService;
 use App\Enums\GenderPolicy;
 use App\Enums\RideRequestStatus;
 use Carbon\CarbonInterface;
@@ -14,6 +15,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 #[Fillable([
     'user_id', 'airport_code', 'terminal', 'zone_id', 'drop_landmark', 'flight_number',
     'window_start', 'window_end', 'seats', 'luggage_count', 'gender_preference', 'note',
+    'quoted_fare', 'cab_service', 'meeting_point',
 ])]
 class RideRequest extends Model
 {
@@ -40,6 +42,7 @@ class RideRequest extends Model
             'cancelled_at' => 'datetime',
             'status' => RideRequestStatus::class,
             'gender_preference' => GenderPolicy::class,
+            'cab_service' => CabService::class,
         ];
     }
 

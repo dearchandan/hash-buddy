@@ -42,6 +42,9 @@ class RideGroup {
     this.zone,
     this.meetingPoint,
     this.fareEstimate,
+    this.quotedFare,
+    this.fareShare,
+    this.cabServiceLabel,
   });
 
   factory RideGroup.fromJson(Map<String, dynamic> json) => RideGroup(
@@ -57,6 +60,9 @@ class RideGroup {
         genderPolicy: json['gender_policy'] as String? ?? 'any',
         isMember: json['is_member'] as bool? ?? false,
         meetingPoint: json['meeting_point'] as String?,
+        quotedFare: json['quoted_fare'] as int?,
+        fareShare: json['fare_share'] as int?,
+        cabServiceLabel: json['cab_service_label'] as String?,
         zone: json['zone'] is Map<String, dynamic> ? Zone.fromJson(json['zone'] as Map<String, dynamic>) : null,
         fareEstimate: json['fare_estimate'] is Map<String, dynamic>
             ? FareEstimate.fromJson(json['fare_estimate'] as Map<String, dynamic>)
@@ -82,6 +88,15 @@ class RideGroup {
   final Zone? zone;
   final String? meetingPoint;
   final FareEstimate? fareEstimate;
+
+  /// What the host actually saw in Ola or Uber, and each traveller's share of
+  /// it at the ride's current occupancy. Null when nobody checked a fare —
+  /// deliberately separate from [fareEstimate], which is a seeded guess.
+  final int? quotedFare;
+  final int? fareShare;
+  final String? cabServiceLabel;
+
+  bool get hasQuotedFare => quotedFare != null;
 
   bool get isWomenOnly => genderPolicy == 'women_only';
 

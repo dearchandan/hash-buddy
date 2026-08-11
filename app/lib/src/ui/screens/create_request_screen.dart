@@ -20,6 +20,12 @@ class CreateRequestScreen extends StatefulWidget {
 class _CreateRequestScreenState extends State<CreateRequestScreen> {
   final TextEditingController _flight = TextEditingController();
   final TextEditingController _landmark = TextEditingController();
+  final TextEditingController _fare = TextEditingController();
+  final TextEditingController _spot = TextEditingController();
+
+  /// Null means "not decided", which is the honest state for someone who
+  /// opened a ride the moment they landed.
+  String? _cabService;
 
   String _terminal = 'T1';
   Zone? _zone;
@@ -55,6 +61,8 @@ class _CreateRequestScreenState extends State<CreateRequestScreen> {
   void dispose() {
     _flight.dispose();
     _landmark.dispose();
+    _fare.dispose();
+    _spot.dispose();
     super.dispose();
   }
 
@@ -121,6 +129,9 @@ class _CreateRequestScreenState extends State<CreateRequestScreen> {
             genderPreference: _womenOnly ? 'women_only' : 'any',
             flightNumber: _flight.text.trim(),
             dropLandmark: _landmark.text.trim(),
+            quotedFare: int.tryParse(_fare.text.trim()),
+            cabService: _cabService,
+            meetingPoint: _spot.text.trim(),
           );
 
       if (mounted) {
@@ -263,6 +274,61 @@ class _CreateRequestScreenState extends State<CreateRequestScreen> {
           const SizedBox(height: 12),
           Text(
             "We'll prioritize passengers on the same flight.",
+            style: TextStyle(fontSize: 13, color: scheme.onSurfaceVariant, height: 1.4),
+          ),
+
+          // Everything below is optional, and the copy says so plainly. Someone
+          // who checked Ola before opening the app has a real number worth
+          // sharing; someone who just walked out of arrivals does not, and a
+          // required field would only collect an invented one.
+          _section('FARE & PICKUP  ·  OPTIONAL'),
+          _label('Fare you were quoted'),
+          TextField(
+            controller: _fare,
+            keyboardType: TextInputType.number,
+            inputFormatters: <TextInputFormatter>[
+              FilteringTextInputFormatter.digitsOnly,
+              LengthLimitingTextInputFormatter(6),
+            ],
+            decoration: const InputDecoration(prefixText: '₹ ', hintText: '1200'),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'If you already checked Ola or Uber, share it and whoever joins can '
+            'see their share up front. Skip it and you can agree later.',
+            style: TextStyle(fontSize: 13, color: scheme.onSurfaceVariant, height: 1.4),
+          ),
+
+          const SizedBox(height: 20),
+          _label('Cab service'),
+          Wrap(
+            spacing: 8,
+            children: <Widget>[
+              for (final MapEntry<String?, String> option in const <String?, String>{
+                null: 'Not decided',
+                'ola': 'Ola',
+                'uber': 'Uber',
+                'rapido': 'Rapido',
+              }.entries)
+                ChoiceChip(
+                  label: Text(option.value),
+                  selected: _cabService == option.key,
+                  onSelected: (_) => setState(() => _cabService = option.key),
+                ),
+            ],
+          ),
+
+          const SizedBox(height: 20),
+          _label('Where will you wait?'),
+          TextField(
+            controller: _spot,
+            textCapitalization: TextCapitalization.sentences,
+            inputFormatters: <TextInputFormatter>[LengthLimitingTextInputFormatter(120)],
+            decoration: const InputDecoration(hintText: 'Gate 4, taxi bay 2'),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Helps whoever joins find you at the kerb.',
             style: TextStyle(fontSize: 13, color: scheme.onSurfaceVariant, height: 1.4),
           ),
 

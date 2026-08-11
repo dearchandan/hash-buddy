@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests;
 
+use App\Enums\CabService;
 use App\Enums\GenderPolicy;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
@@ -23,6 +24,14 @@ class StoreRideRequestRequest extends FormRequest
             'luggage_count' => ['sometimes', 'integer', 'min:0', 'max:6'],
             'gender_preference' => ['sometimes', Rule::in(GenderPolicy::values())],
             'note' => ['nullable', 'string', 'max:280'],
+
+            // All three optional by design. A traveller who checked Ola before
+            // opening the app has a real number to share; one who walked out of
+            // arrivals wanting company does not, and a required field would
+            // only get an invented figure that the joiner would then trust.
+            'quoted_fare' => ['nullable', 'integer', 'min:1', 'max:100000'],
+            'cab_service' => ['nullable', Rule::in(CabService::values())],
+            'meeting_point' => ['nullable', 'string', 'max:120'],
         ];
     }
 

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../models/open_ride.dart';
 import '../../models/ride_group.dart';
 import '../../models/ride_request.dart';
 import '../../state/auth_controller.dart';
@@ -8,6 +9,7 @@ import '../../state/rides_controller.dart';
 import '../formatters.dart';
 import '../widgets/app_card.dart';
 import '../widgets/info_chip.dart';
+import 'area_rides_screen.dart';
 import 'create_request_screen.dart';
 import 'group_screen.dart';
 import 'matches_screen.dart';
@@ -34,6 +36,12 @@ class _HomeScreenState extends State<HomeScreen> {
         showError(context, error);
       }
     }
+
+    // Separate and unguarded: areas are a bonus surface, and failing to load
+    // them must never blank out the rides a traveller already has.
+    if (mounted) {
+      await context.read<RidesController>().loadAreas();
+    }
   }
 
   Future<void> _newRequest() async {
@@ -55,7 +63,8 @@ class _HomeScreenState extends State<HomeScreen> {
     final AuthController auth = context.watch<AuthController>();
     final List<RideRequest> open = rides.openRequests;
     final List<RideGroup> groups = rides.myGroups;
-    final bool empty = open.isEmpty && groups.isEmpty;
+    final List<Area> areas = rides.areas;
+    final bool empty = open.isEmpty && groups.isEmpty && areas.isEmpty;
 
     return Scaffold(
       appBar: AppBar(
@@ -81,6 +90,28 @@ class _HomeScreenState extends State<HomeScreen> {
                 padding: const EdgeInsets.fromLTRB(16, 8, 16, 96),
                 children: <Widget>[
                   if (empty) const _EmptyState(),
+
+                  // Above the traveller's own rides on purpose. Someone who has
+                  // just landed with nothing planned is the common case, and
+                  // for them a ride that already exists beats a form.
+                  if (areas.isNotEmpty) ...<Widget>[
+                    const _SectionHeader('Rides you can join now'),
+                    SizedBox(
+                      height: 132,
+                      child: ListView.separated(
+                        scrollDirection: Axis.horizontal,
+                        clipBehavior: Clip.none,
+                        itemCount: areas.length,
+                        separatorBuilder: (_, __) => const SizedBox(width: 12),
+                        itemBuilder: (BuildContext context, int index) => _AreaCard(
+                          area: areas[index],
+                          onChanged: _refresh,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+                  ],
+
                   if (groups.isNotEmpty) ...<Widget>[
                     const _SectionHeader('Your rides'),
                     for (final RideGroup group in groups) ...<Widget>[
@@ -115,6 +146,74 @@ class _SectionHeader extends StatelessWidget {
       child: Text(
         title,
         style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+      ),
+    );
+  }
+}
+
+/// One area with rides already heading to it.
+///
+/// Sized to be read at a glance while walking: the place, how many rides, and
+/// when the next one leaves. Everything else waits for the listing.
+class _AreaCard extends StatelessWidget {
+  const _AreaCard({required this.area, required this.onChanged});
+
+  final Area area;
+  final Future<void> Function() onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final ColorScheme scheme = Theme.of(context).colorScheme;
+    final int rides = area.openRidesCount;
+
+    return SizedBox(
+      width: 190,
+      child: AppCard(
+        borderColor: scheme.primary.withValues(alpha: 0.35),
+        onTap: () async {
+          await Navigator.of(context).push(
+            MaterialPageRoute<void>(builder: (_) => AreaRidesScreen(area: area)),
+          );
+          await onChanged();
+        },
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: <Widget>[
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Text(
+                  area.zone.name,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  '$rides ride${rides == 1 ? '' : 's'} · '
+                  '${area.seatsAvailable} seat${area.seatsAvailable == 1 ? '' : 's'}',
+                  style: TextStyle(fontSize: 13, color: scheme.primary, fontWeight: FontWeight.w600),
+                ),
+              ],
+            ),
+            if (area.nextDeparture != null)
+              Row(
+                children: <Widget>[
+                  Icon(Icons.schedule_rounded, size: 14, color: scheme.onSurfaceVariant),
+                  const SizedBox(width: 4),
+                  Expanded(
+                    child: Text(
+                      'Next ${clockTime(area.nextDeparture!)}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(fontSize: 12, color: scheme.onSurfaceVariant),
+                    ),
+                  ),
+                ],
+              ),
+          ],
+        ),
       ),
     );
   }

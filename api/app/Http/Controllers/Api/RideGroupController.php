@@ -63,6 +63,35 @@ class RideGroupController extends Controller
         ]);
     }
 
+    /**
+     * Join a ride found by browsing, without filling in a request first.
+     *
+     * Everything the matcher needs except party size and luggage is already on
+     * the ride, so asking for it again is asking a traveller to describe a trip
+     * the screen is currently showing them.
+     */
+    public function quickJoin(Request $request, RideGroup $rideGroup): JsonResponse
+    {
+        $validated = $request->validate([
+            'seats' => ['sometimes', 'integer', 'min:1', 'max:'.config('hashbuddy.groups.absolute_max_seats')],
+            'luggage_count' => ['sometimes', 'integer', 'min:0', 'max:6'],
+            'flight_number' => ['nullable', 'string', 'max:10'],
+        ]);
+
+        $this->groups->quickJoin(
+            $rideGroup,
+            $request->user(),
+            $validated['seats'] ?? 1,
+            $validated['luggage_count'] ?? 1,
+            $validated['flight_number'] ?? null,
+        );
+
+        return response()->json([
+            'message' => 'You are on this ride.',
+            'group' => new RideGroupResource($rideGroup->refresh()->load(['zone', 'activeMembers.user'])),
+        ]);
+    }
+
     public function leave(Request $request, RideGroup $rideGroup): JsonResponse
     {
         $group = $this->groups->leave($rideGroup, $request->user());

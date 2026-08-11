@@ -39,7 +39,13 @@ class RideGroupService
                 'window_end' => $request->window_end,
                 'max_seats' => $this->clampSeats($maxSeats, $request->seats),
                 'gender_policy' => $request->gender_preference,
-                'meeting_point' => $meetingPoint,
+                // The fare and the spot describe the cab, not the traveller, so
+                // they move onto the ride from whichever request opened it.
+                // An explicit meeting point argument still wins, since that is
+                // a caller deliberately overriding what the request carried.
+                'meeting_point' => $meetingPoint ?? $request->meeting_point,
+                'quoted_fare' => $request->quoted_fare,
+                'cab_service' => $request->cab_service,
             ]);
 
             $this->attach($group, $request, MemberRole::Host);
@@ -108,6 +114,53 @@ class RideGroupService
             $this->announceJoin($group, $request->user);
 
             return $member;
+        });
+    }
+
+    /**
+     * Take a seat in a ride you found by browsing, without describing a trip
+     * the ride has already described.
+     *
+     * The whole point of the browse flow: everything except how many of you
+     * there are and how much you are carrying is already known — the airport,
+     * the terminal, the destination, the departure window all come from the
+     * ride itself. Deriving the window from the group rather than asking for
+     * one also means the overlap check can never fail, because by tapping join
+     * you have agreed to their window.
+     *
+     * Wrapped in its own transaction so a join that loses the race for the last
+     * seat does not leave an orphaned open request behind.
+     */
+    public function quickJoin(
+        RideGroup $group,
+        User $user,
+        int $seats = 1,
+        int $luggage = 1,
+        ?string $flightNumber = null,
+    ): RideGroupMember {
+        if ($user->isBlocked()) {
+            throw RideException::userBlocked();
+        }
+
+        return DB::transaction(function () use ($group, $user, $seats, $luggage, $flightNumber) {
+            $request = RideRequest::create([
+                'user_id' => $user->id,
+                'airport_code' => $group->airport_code,
+                'terminal' => $group->terminal,
+                'zone_id' => $group->zone_id,
+                'window_start' => $group->window_start,
+                'window_end' => $group->window_end,
+                'seats' => $seats,
+                'luggage_count' => $luggage,
+                'flight_number' => $flightNumber,
+                // Not the joiner's to set. They are choosing this specific ride,
+                // so a preference of their own would only contradict it.
+                'gender_preference' => GenderPolicy::Any,
+            ]);
+
+            $request->setRelation('user', $user);
+
+            return $this->join($group, $request);
         });
     }
 

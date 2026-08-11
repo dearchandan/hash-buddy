@@ -13,6 +13,9 @@ Route::prefix('v1')->group(function () {
 
     // Public
     Route::get('zones', [ZoneController::class, 'index']);
+    // Browse: areas people are already heading to, and the rides going there.
+    Route::get('areas', [ZoneController::class, 'areas']);
+    Route::get('zones/{zone}/open-rides', [ZoneController::class, 'openRides']);
 
     Route::middleware('throttle:6,1')->group(function () {
         Route::post('auth/otp', [AuthController::class, 'requestOtp']);
@@ -40,6 +43,8 @@ Route::prefix('v1')->group(function () {
 
         // Join / leave a ride
         Route::post('groups/{rideGroup}/join', [RideGroupController::class, 'join']);
+        // Join straight from the browse list, deriving the request from the ride.
+        Route::post('groups/{rideGroup}/quick-join', [RideGroupController::class, 'quickJoin']);
         Route::post('groups/{rideGroup}/leave', [RideGroupController::class, 'leave']);
 
         // Push registration

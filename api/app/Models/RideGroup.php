@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Enums\CabService;
 use App\Enums\GenderPolicy;
 use App\Enums\MemberStatus;
 use App\Enums\RideGroupStatus;
@@ -16,7 +17,7 @@ use Illuminate\Support\Str;
 
 #[Fillable([
     'code', 'created_by', 'airport_code', 'terminal', 'zone_id', 'window_start', 'window_end',
-    'max_seats', 'gender_policy', 'meeting_point',
+    'max_seats', 'gender_policy', 'meeting_point', 'quoted_fare', 'cab_service',
 ])]
 class RideGroup extends Model
 {
@@ -41,7 +42,26 @@ class RideGroup extends Model
             'cancelled_at' => 'datetime',
             'status' => RideGroupStatus::class,
             'gender_policy' => GenderPolicy::class,
+            'cab_service' => CabService::class,
         ];
+    }
+
+    /**
+     * What each traveller pays if this ride leaves as it stands.
+     *
+     * Only ever derived from a fare the host actually saw in Ola or Uber, never
+     * from the seeded zone estimate — mixing the two would present a guess with
+     * the authority of a quote.
+     */
+    public function fareShare(?int $extraSeats = null): ?int
+    {
+        if ($this->quoted_fare === null) {
+            return null;
+        }
+
+        $seats = max(1, $this->seats_taken + ($extraSeats ?? 0));
+
+        return (int) ceil($this->quoted_fare / $seats);
     }
 
     protected static function booted(): void
@@ -103,6 +123,21 @@ class RideGroup extends Model
     public function scopeOverlapping(Builder $query, CarbonInterface $start, CarbonInterface $end): Builder
     {
         return $query->where('window_start', '<', $end)->where('window_end', '>', $start);
+    }
+
+    /**
+     * Rides a stranger could actually take a seat in right now.
+     *
+     * All three conditions matter. Status alone leaves full rides in the list;
+     * seats alone leaves cancelled ones; and without the window check the
+     * browse screen slowly fills with rides that departed hours ago, which is
+     * how a discovery surface dies.
+     */
+    public function scopeJoinable(Builder $query): Builder
+    {
+        return $query->where('status', RideGroupStatus::Forming)
+            ->whereColumn('seats_taken', '<', 'max_seats')
+            ->where('window_end', '>', now());
     }
 
     public function seatsAvailable(): int
