@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../../models/open_ride.dart';
 import '../../models/ride_group.dart';
 import '../../models/ride_request.dart';
+import '../../push/push_service.dart';
 import '../../state/auth_controller.dart';
 import '../../state/rides_controller.dart';
 import '../formatters.dart';
@@ -26,6 +27,18 @@ class _HomeScreenState extends State<HomeScreen> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) => _refresh());
+  }
+
+  /// Drops this handset's push registration before the token is cleared.
+  ///
+  /// Order matters: signing out revokes the bearer token, and the de-register
+  /// call needs it. Skip it and the phone keeps receiving notifications for
+  /// whoever just signed out of it.
+  Future<void> _signOut(BuildContext context) async {
+    final AuthController auth = context.read<AuthController>();
+
+    await context.read<PushService>().unregister();
+    await auth.signOut();
   }
 
   Future<void> _refresh() async {
@@ -73,7 +86,7 @@ class _HomeScreenState extends State<HomeScreen> {
           IconButton(
             tooltip: 'Sign out',
             icon: const Icon(Icons.logout_rounded),
-            onPressed: () => context.read<AuthController>().signOut(),
+            onPressed: () => _signOut(context),
           ),
         ],
       ),

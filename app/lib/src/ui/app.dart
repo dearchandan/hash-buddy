@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -56,18 +58,40 @@ class _Root extends StatefulWidget {
 class _RootState extends State<_Root> {
   AuthStatus? _previous;
 
+  /// Everything that has to happen the moment signing in or out completes.
+  void _onSignInChanged(AuthStatus status) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        return;
+      }
+
+      switch (status) {
+        // Dropping a signed-out traveller's rides keeps the next person who
+        // signs in on this device from seeing them.
+        case AuthStatus.signedOut:
+          context.read<RidesController>().reset();
+
+        // The FCM token is fetched at launch, when nobody is signed in yet and
+        // registering it can only be refused. This is the first moment the call
+        // can succeed, and without it the device never registers at all — a
+        // server with nowhere to deliver to looks exactly like push being
+        // broken: no notifications, and an incoming call that never rings.
+        case AuthStatus.awaitingProfile:
+        case AuthStatus.signedIn:
+          unawaited(context.read<PushService>().syncRegistration());
+
+        case AuthStatus.unknown:
+          break;
+      }
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final AuthStatus status = context.watch<AuthController>().status;
 
-    // Dropping a signed-out traveller's rides keeps the next person who signs
-    // in on this device from seeing them.
-    if (_previous != status && status == AuthStatus.signedOut) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) {
-          context.read<RidesController>().reset();
-        }
-      });
+    if (_previous != status) {
+      _onSignInChanged(status);
     }
     _previous = status;
 
