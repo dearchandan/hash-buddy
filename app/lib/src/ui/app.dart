@@ -10,6 +10,7 @@ import 'screens/login_screen.dart';
 import 'screens/profile_setup_screen.dart';
 import 'screens/splash_screen.dart';
 import 'theme.dart';
+import 'widgets/incoming_call_watcher.dart';
 
 class HashBuddyApp extends StatelessWidget {
   const HashBuddyApp({super.key});
@@ -37,7 +38,9 @@ class HashBuddyApp extends StatelessWidget {
         title: 'Hash Buddy',
         debugShowCheckedModeBanner: false,
         theme: buildHashBuddyTheme(),
-        home: const _Root(),
+        // Wraps the whole app rather than a ride screen: a call can arrive
+        // while the traveller is anywhere, including on the home screen.
+        home: const IncomingCallWatcher(child: _Root()),
       ),
     );
   }

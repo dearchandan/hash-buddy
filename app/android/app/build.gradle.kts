@@ -5,6 +5,18 @@ plugins {
     id("com.android.application")
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
+    // Applied conditionally below, for the same reason as the release keystore.
+    id("com.google.gms.google-services") apply false
+}
+
+// google-services.json carries the Firebase project this build talks to. It is
+// gitignored — it is per-project, not per-developer — and the plugin hard-fails
+// the build when it is missing. Applying it only when the file is there keeps a
+// fresh checkout buildable: push is the one feature that goes quiet, which is
+// exactly what PushService already degrades to.
+val hasFirebaseConfig = file("google-services.json").exists()
+if (hasFirebaseConfig) {
+    apply(plugin = "com.google.gms.google-services")
 }
 
 // Release signing is read from android/key.properties, which is gitignored and
